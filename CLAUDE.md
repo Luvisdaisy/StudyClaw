@@ -10,10 +10,13 @@ This is an AI-powered customer service chatbot for floor cleaning robots (扫地
 
 ```bash
 # Run the Streamlit app
-streamlit run app.py
+uv run streamlit run app.py
 
 # Initialize/load documents to vector store
-python -m rag.vector_store
+uv run python -m rag.vector_store
+
+# Run tests
+uv run pytest
 ```
 
 **Required Environment Variable:**
@@ -24,11 +27,10 @@ python -m rag.vector_store
 ```
 app.py                 # Streamlit entry point - handles UI and message streaming
 agent/
-  react_agent.py       # ReAct agent using LangChain create_agent
+  react_agent.py       # ReAct agent using LangGraph
   tools/
     agent_tools.py     # Custom tools: RAG, weather, user info, external data, report generation
-    middleware.py      # Middleware for prompt switching and logging
-    factory.py         # Tool factory
+    middleware.py     # Middleware for prompt switching and logging
 model/
   factory.py           # Chat and embedding model factory (Tongyi Qwen + DashScope)
 rag/
@@ -38,6 +40,7 @@ utils/
   config_handler.py    # YAML config loader
   prompt_loader.py    # System prompt loader
   logger_handler.py   # Logging utilities
+  file_handler.py     # File utilities
 ```
 
 ## Configuration
