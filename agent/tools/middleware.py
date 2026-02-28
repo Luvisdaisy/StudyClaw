@@ -1,60 +1,78 @@
-from langchain.agents import AgentState
-from langchain.agents.middleware import (
-    wrap_tool_call,
-    before_model,
-    dynamic_prompt,
-    ModelRequest,
-)
-from langchain_core.messages import ToolMessage
-from langgraph.prebuilt.tool_node import ToolCallRequest
-from langgraph.runtime import Runtime
-from langgraph.types import Command
 from utils.logger_handler import logger
 from utils.prompt_loader import load_report_prompts, load_system_prompts
-from typing import Callable
+from langgraph.types import Command
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 
-@wrap_tool_call
-def monitor_tool(
-    # 请求的数据封装
-    request: ToolCallRequest,
-    # 执行的函数本身
-    handler: Callable[[ToolCallRequest], ToolMessage | Command],
-) -> ToolMessage | Command:  # 工具执行的监控
-    logger.info(f"[tool monitor]执行工具：{request.tool_call['name']}")
-    logger.info(f"[tool monitor]传入参数：{request.tool_call['args']}")
+def log_before_model_node(state: dict) -> dict:
+    """在模型执行前输出日志的节点"""
+    messages = state.get("messages", [])
+    logger.info(f"[log_before_model]即将调用模型，带有{len(messages)}条消息。")
 
-    try:
-        result = handler(request)
-        logger.info(f"[tool monitor]工具{request.tool_call['name']}调用成功")
+    if messages:
+        last_msg = messages[-1]
+        if hasattr(last_msg, "content"):
+            logger.debug(
+                f"[log_before_model]{type(last_msg).__name__} | {last_msg.content.strip()[:200]}"
+            )
 
-        if request.tool_call["name"] == "fill_context_for_report":
-            request.runtime.context["report"] = True
-
-        return result
-    except Exception as e:
-        logger.error(f"工具{request.tool_call['name']}调用失败，原因：{str(e)}")
-        raise e
+    return state
 
 
-@before_model
-def log_before_model(
-    state: AgentState,  # 整个Agent智能体中的状态记录
-    runtime: Runtime,  # 记录了整个执行过程中的上下文信息
-):  # 在模型执行前输出日志
-    logger.info(f"[log_before_model]即将调用模型，带有{len(state['messages'])}条消息。")
+def log_after_model_node(state: dict) -> dict:
+    """在模型执行后检测工具调用，更新上下文"""
+    messages = state.get("messages", [])
+    context = state.get("context", {}).copy()
 
-    logger.debug(
-        f"[log_before_model]{type(state['messages'][-1]).__name__} | {state['messages'][-1].content.strip()}"
-    )
+    # 检测 fill_context_for_report 调用
+    for msg in messages:
+        if isinstance(msg, AIMessage) and hasattr(msg, "tool_calls"):
+            for tc in msg.tool_calls:
+                if tc.get("name") == "fill_context_for_report":
+                    context["report"] = True
+                    logger.info("[middleware]检测到 fill_context_for_report 调用，设置 report=True")
 
-    return None
+    return {"context": context}
 
 
-@dynamic_prompt  # 每一次在生成提示词之前，调用此函数
-def report_prompt_switch(request: ModelRequest):  # 动态切换提示词
-    is_report = request.runtime.context.get("report", False)
-    if is_report:  # 是报告生成场景，返回报告生成提示词内容
+def should_use_report_prompt(state: dict) -> str:
+    """条件边：根据 context 决定使用哪个提示词"""
+    return "report" if state.get("context", {}).get("report", False) else "main"
+
+
+def should_switch_prompt(state: dict) -> str:
+    """检查是否需要切换到报告提示词"""
+    context = state.get("context", {})
+    return "report" if context.get("report", False) else "main"
+
+
+def get_prompt_for_context(context: dict) -> str:
+    """根据上下文获取适当的提示词"""
+    if context.get("report", False):
         return load_report_prompts()
-
     return load_system_prompts()
+
+
+def log_tool_call(tool_name: str, tool_args: dict) -> None:
+    """记录工具调用"""
+    logger.info(f"[tool monitor]执行工具：{tool_name}")
+    logger.info(f"[tool monitor]传入参数：{tool_args}")
+
+
+def log_tool_result(tool_name: str, success: bool) -> None:
+    """记录工具执行结果"""
+    if success:
+        logger.info(f"[tool monitor]工具{tool_name}调用成功")
+    else:
+        logger.error(f"[tool monitor]工具{tool_name}调用失败")
+
+
+def check_and_set_report_context(tool_calls: list) -> dict:
+    """检查工具调用并设置报告上下文"""
+    context = {}
+    if tool_calls:
+        for tool_call in tool_calls:
+            if tool_call.get("name") == "fill_context_for_report":
+                context["report"] = True
+                break
+    return context
