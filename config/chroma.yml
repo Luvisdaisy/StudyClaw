@@ -1,10 +1,32 @@
-collection_name: agent
+collection_name: study_materials
 persist_directory: chroma_db
-k: 3
+k: 5
 data_path: data
 md5_hex_store: md5.text
-allow_knowledge_file_type: ["txt", "pdf"]
 
+# 支持的文件类型
+allow_knowledge_file_type:
+  - txt
+  - md
+  - pdf
+  - docx
+  - csv
+  - py
+  - js
+  - java
+  - cpp
+  - go
+  - rs
+  - pptx
+  - html
+  - json
+  - yaml
+  - yml
+
+# 管理的目录列表
+managed_directories: []
+
+# 文档分块设置
 chunk_size: 200
 chunk_overlap: 20
 separators: ["\n\n", "\n", ".", "!", "?", "。", "！", "？", " ", ""]

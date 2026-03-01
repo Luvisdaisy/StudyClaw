@@ -14,6 +14,13 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
     "langchain-chroma>=1.1.0",
+    "unstructured",
+    "jq",
+    "markdown",
+    "python-docx>=1.2.0",
+    "reportlab>=4.4.10",
+    "python-pptx>=1.0.2",
+    "spacy>=3.8.11",
 ]
 
 [project.optional-dependencies]
