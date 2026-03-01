@@ -17,9 +17,13 @@ uv run python -m rag.vector_store
 
 # Run tests
 uv run pytest
+
+# Add new lib
+uv add
 ```
 
 **Required Environment Variable:**
+
 - `DASHSCOPE_API_KEY` - Alibaba DashScope API key for LLM access
 
 ## Architecture
@@ -46,6 +50,7 @@ utils/
 ## Configuration
 
 All configuration is in YAML files under `config/`:
+
 - `rag.yml` - Chat model (`qwen3-max`) and embedding model (`text-embedding-v4`)
 - `chroma.yml` - Vector store settings (collection name "agent", chunk_size 200)
 - `prompts.yml` - Prompt configuration
@@ -54,6 +59,7 @@ All configuration is in YAML files under `config/`:
 ## Prompt System
 
 Prompts are stored in `prompts/` directory:
+
 - `main_prompts.txt` - Main system prompt
 - `rag_prompts.txt` - RAG summarization prompt
 - `report_prompts.txt` - Report generation prompt
@@ -63,6 +69,7 @@ The agent supports dynamic prompt switching via middleware (see `agent/tools/mid
 ## Knowledge Base
 
 Knowledge base documents are stored in `data/` as Chinese TXT files:
+
 - `扫地机器人100问2.txt`
 - `扫拖一体机器人100问.txt`
 - `故障排除.txt`
