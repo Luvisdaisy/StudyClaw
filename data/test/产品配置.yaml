@@ -1,0 +1,14 @@
+product:
+  name: 扫地机器人SC-2000
+  model: SC-2000
+  price: 2999
+  specs:
+    battery_capacity: 5200mAh
+    running_time: 120分钟
+    suction: 2000Pa
+    noise_level: 55分贝
+  features:
+    - 激光导航
+    - 智能避障
+    - APP控制
+    - 定时清扫
