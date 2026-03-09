@@ -39,6 +39,7 @@ logs/
 *.log
 
 # Database
+data/uploads/
 chroma_db/
 *.sqlite3
 
