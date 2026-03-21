@@ -243,13 +243,19 @@ StudyClaw/
 ---
 
 ## 最近更新
+- 2026-03-22: 阶段三实际测试验证 ✅
+  - 使用真实 GitHub PAT 测试 `Luvisdaisy/StudTest` 仓库
+  - 发现 bug: `api/github.py` 中 `async_session` 导入错误 (应为 `get_db_context`)
+  - 修复后同步成功: Added=2 (PDF+MD), Skipped=0, Failed=0
+  - 文档正确出现在项目知识库，可通过聊天检索
+  - PR #5 追加修复提交: https://github.com/Luvisdaisy/StudyClaw/pull/5
+
 - 2026-03-22: 完成阶段三 ✅ - GitHub 同步功能
   - 后端: `services/github_service.py` - GitHub API 封装 (PAT 验证、仓库列表、文件下载、同步逻辑)
   - 后端: `api/github.py` - GitHub 同步 API (connect/disconnect/repos/sync/status)
   - 前端: `components/github/GitHubSettings.tsx` - PAT 输入、用户信息、仓库选择
   - 前端: `components/github/SyncStatus.tsx` - 同步按钮、进度显示、结果统计
   - 前端: Settings 页面集成 GitHub 组件
-  - API 端点测试通过，前端 Settings 页面渲染正常
   - PR #5: https://github.com/Luvisdaisy/StudyClaw/pull/5
 
 - 2026-03-22: 前端删除确认对话框统一为 UI 组件
