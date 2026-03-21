@@ -69,14 +69,14 @@ class GitHubSyncStatusResponse(BaseModel):
 
 async def run_sync(project_id: str, token: str, repo_full_name: str, branch: str):
     """Background task to run repository sync"""
-    from database.session import async_session
+    from database.session import get_db_context
 
     state = get_sync_state(project_id)
     state.status = SyncStatus.RUNNING
     state.result = None
 
     try:
-        async with async_session() as session:
+        async with get_db_context() as session:
             service = GitHubService(session, uuid.UUID(project_id))
             result = await service.sync_repo(token, repo_full_name, branch)
             state.result = result
