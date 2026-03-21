@@ -43,16 +43,6 @@
 | 手动同步 | 用户触发同步操作 | P1 |
 | 文档处理 | 自动处理仓库中的文档 | P1 |
 
-### 2.4 OpenClaw API 集成
-
-| 功能 | 描述 | 优先级 |
-|------|------|--------|
-| REST API | 暴露本地 HTTP 接口 | P0 |
-| 项目列表 | 获取用户项目 | P1 |
-| 问答接口 | 项目对话接口 | P0 |
-| 文档管理接口 | 文件 CRUD 接口 | P1 |
-| 单次返回 | 一次性返回完整答案 | P0 |
-
 ---
 
 ## 3. 技术架构
@@ -94,7 +84,6 @@
 │  │  - GET  /api/projects/{id}/documents (文档列表)         │    │
 │  │  - DELETE /api/documents/{id} (删除文档)               │    │
 │  │  - POST /api/projects/{id}/chat (对话)                  │    │
-│  │  - POST /api/chat (OpenClaw 统一入口)                  │    │
 │  │  - POST /api/projects/{id}/github/sync (GitHub 同步)    │    │
 │  └─────────────────────────────────────────────────────────┘    │
 └──────────────────────────┬──────────────────────────────────────┘
@@ -148,29 +137,7 @@
 
 ## 5. API 接口设计
 
-### 5.1 OpenClaw 统一入口（核心）
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | /api/chat | OpenClaw 统一对话入口 |
-
-**请求体：**
-```json
-{
-  "project": "项目名称",
-  "message": "用户问题"
-}
-```
-
-**响应：**
-```json
-{
-  "success": true,
-  "answer": "AI 回答内容"
-}
-```
-
-### 5.2 项目管理
+### 5.1 项目管理
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
@@ -179,7 +146,7 @@
 | GET | /api/projects/{id} | 获取项目详情 |
 | DELETE | /api/projects/{id} | 删除项目 |
 
-### 5.3 文档管理
+### 5.2 文档管理
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
@@ -187,13 +154,13 @@
 | GET | /api/projects/{id}/documents | 获取文档列表 |
 | DELETE | /api/documents/{id} | 删除文档 |
 
-### 5.4 问答对话
+### 5.3 问答对话
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | POST | /api/projects/{id}/chat | 项目对话（流式） |
 
-### 5.5 GitHub 同步
+### 5.4 GitHub 同步
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
@@ -260,89 +227,7 @@ api/
 
 ---
 
-### 阶段二：GitHub 同步
-
-#### 技术方案
-
-| 功能 | 技术实现 |
-|------|----------|
-| **GitHub API** | PyGithub 库 |
-| **仓库列表** | GitHub API 列出用户仓库 |
-| **文件下载** | GitHub Contents API |
-| **同步触发** | 手动 POST 触发 |
-
-#### 实现思路
-
-1. **连接 GitHub**：用户输入 PAT 令牌，存储到项目配置
-2. **获取仓库列表**：调用 GitHub API 获取用户有权限的仓库
-3. **选择仓库**：用户选择后保存到项目配置
-4. **手动同步流程**：
-   - 调用 GitHub API 获取仓库文件树
-   - 过滤 pdf/md/txt 文件
-   - 下载文件内容
-   - 调用 LangChain 加载器处理
-   - 存入项目对应的 Chroma collection
-5. **去重**：使用 file_hash (GitHub commit ID + path) 避免重复
-
-#### 关键文件
-
-```
-services/
-├── github_service.py    # 新增：GitHub API 封装
-api/
-└── github.py           # 新增：GitHub 同步 API
-```
-
----
-
-### 阶段三：OpenClaw 集成
-
-#### 技术方案
-
-| 功能 | 技术实现 |
-|------|----------|
-| **API 框架** | FastAPI |
-| **请求解析** | Pydantic |
-| **响应格式** | 标准 JSON |
-| **Agent 调用** | LangGraph 同步/异步调用 |
-
-#### 实现思路
-
-1. **统一入口**：`POST /api/chat`
-   - 解析 JSON body 中的 `project` + `message`
-   - 如果项目不存在，自动创建
-   - 调用 LangGraph Agent 处理
-   - 返回标准 JSON 响应
-
-2. **Agent 改造**：
-   - 项目级别 RAG retriever 作为默认工具
-   - 文件管理工具（查询项目文档列表等）
-   - GitHub 同步工具（可选）
-
-3. **错误处理**：
-   - LLM 调用失败 → 返回错误信息
-   - 项目不存在 → 自动创建
-   - 文档为空 → 返回提示
-
-#### API 响应格式
-
-```json
-// 成功
-{
-  "success": true,
-  "answer": "基于文档的回答内容..."
-}
-
-// 失败
-{
-  "success": false,
-  "error": "错误信息"
-}
-```
-
----
-
-### 阶段四：Next.js 前端开发
+### 阶段二：前端开发
 
 #### 技术方案
 
@@ -419,7 +304,42 @@ frontend/
 
 ---
 
-### 阶段五：增强功能
+### 阶段三：GitHub 同步
+
+#### 技术方案
+
+| 功能 | 技术实现 |
+|------|----------|
+| **GitHub API** | PyGithub 库 |
+| **仓库列表** | GitHub API 列出用户仓库 |
+| **文件下载** | GitHub Contents API |
+| **同步触发** | 手动 POST 触发 |
+
+#### 实现思路
+
+1. **连接 GitHub**：用户输入 PAT 令牌，存储到项目配置
+2. **获取仓库列表**：调用 GitHub API 获取用户有权限的仓库
+3. **选择仓库**：用户选择后保存到项目配置
+4. **手动同步流程**：
+   - 调用 GitHub API 获取仓库文件树
+   - 过滤 pdf/md/txt 文件
+   - 下载文件内容
+   - 调用 LangChain 加载器处理
+   - 存入项目对应的 Chroma collection
+5. **去重**：使用 file_hash (GitHub commit ID + path) 避免重复
+
+#### 关键文件
+
+```
+services/
+├── github_service.py    # 新增：GitHub API 封装
+api/
+└── github.py           # 新增：GitHub 同步 API
+```
+
+---
+
+### 阶段四：增强功能
 
 | 功能 | 技术实现 |
 |------|----------|
@@ -438,7 +358,6 @@ frontend/
 - [ ] RAG 问答能正确检索项目内文档
 - [ ] 文件增删改查功能正常
 - [ ] GitHub 仓库可手动同步
-- [ ] REST API 可被 OpenClaw 调用
 - [ ] Next.js 前端可正常访问
 - [ ] 项目管理功能正常
 - [ ] 文档上传/删除功能正常
