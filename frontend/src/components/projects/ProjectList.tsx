@@ -27,10 +27,7 @@ export function ProjectList() {
 
   const handleDelete = (id: string) => {
     setDeleteId(id);
-    if (window.confirm("Are you sure you want to delete this project?")) {
-      deleteMutation.mutate(id);
-    }
-    setDeleteId(null);
+    deleteMutation.mutate(id);
   };
 
   if (isLoading) {

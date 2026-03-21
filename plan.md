@@ -230,6 +230,21 @@ StudyClaw/
 ---
 
 ## 最近更新
+- 2026-03-22: 前端删除确认对话框统一为 UI 组件
+  - 修复: `ProjectCard.tsx` 删除项目时使用浏览器 `window.confirm()` 的问题
+  - 新增: 使用 `Dialog` 组件显示项目删除确认对话框，显示项目名称和警告信息
+  - 修改: `ProjectList.tsx` 移除 `window.confirm()` 调用，删除确认逻辑移至 ProjectCard
+  - 验证: `npm run lint` (0 errors, 8 warnings) 和 `npm run build` 通过
+  - 浏览器测试: 删除对话框正确显示，点击 Cancel 正确关闭并保留项目
+
+- 2026-03-22: 代码审查修复 (PR #4) - 前端脚手架
+  - 安全修复: API 客户端添加 auth token 拦截器、GitHub repo 格式验证、输入长度限制
+  - 组件修复: ChatMessage useMemo bug 移除、DocumentItem 删除确认、Dialog close button 可访问性
+  - 类型修复: projectId 从 number 改为 string 以匹配 URL params
+  - ESLint: 添加 react-hooks 规则
+  - 性能: 聊天流式响应添加 1MB 缓冲区限制
+  - 构建验证: `npm run lint` 和 `npm run build` 通过
+
 - 2026-03-21: 完成阶段二 ✅ - Next.js 前端开发
   - 初始化 Next.js 16 + Shadcn UI (base-ui)
   - 项目管理界面 (列表、创建、删除)
