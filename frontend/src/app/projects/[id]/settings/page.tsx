@@ -6,9 +6,10 @@ import { projectsApi } from "@/lib/api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Github, Construction } from "lucide-react";
+import { Github } from "lucide-react";
+import { GitHubSettings } from "@/components/github/GitHubSettings";
+import { SyncStatus } from "@/components/github/SyncStatus";
 
 export default function SettingsPage() {
   const params = useParams();
@@ -56,27 +57,22 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <Construction className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Coming Soon</p>
-                        <p className="text-sm text-muted-foreground">
-                          GitHub sync will be available in Phase 3
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">Phase 3</Badge>
-                  </div>
+                  <GitHubSettings projectId={projectId} />
+                </CardContent>
+              </Card>
 
-                  {project?.github_repo && (
-                    <div className="mt-4">
-                      <p className="text-sm text-muted-foreground mb-1">
-                        Configured Repository
-                      </p>
-                      <p className="font-mono text-sm">{project.github_repo}</p>
-                    </div>
-                  )}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Github className="h-5 w-5" />
+                    Repository Sync
+                  </CardTitle>
+                  <CardDescription>
+                    Sync documents from your GitHub repository
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SyncStatus projectId={projectId} />
                 </CardContent>
               </Card>
 

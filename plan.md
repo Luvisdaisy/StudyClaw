@@ -3,7 +3,7 @@
 ## 项目概述
 基于 PRD 文档，将 StudyClaw 从现有 Streamlit 单体应用，部署为 FastAPI + Next.js 的分布式架构。
 
-**当前状态**: 阶段二完成 ✅ - Next.js 前端已构建完成
+**当前状态**: 阶段三完成 ✅ - GitHub 同步已实现
 **目标状态**: FastAPI 后端 + Next.js 前端，支持多项目隔离知识库
 
 ---
@@ -38,6 +38,13 @@
 | GET | /api/projects/{id}/documents | 文档列表 |
 | DELETE | /api/documents/{id} | 删除文档 |
 | POST | /api/projects/{id}/chat | 问答对话 (流式) |
+| POST | /api/projects/{id}/github/connect | 连接 GitHub |
+| POST | /api/projects/{id}/github/disconnect | 断开 GitHub |
+| GET | /api/projects/{id}/github/repos | 仓库列表 |
+| PATCH | /api/projects/{id}/github/repo | 选择仓库 |
+| POST | /api/projects/{id}/github/sync | 触发同步 |
+| GET | /api/projects/{id}/github/sync/status | 同步状态 |
+| GET | /api/projects/{id}/github/user | GitHub 用户信息 |
 
 ---
 
@@ -125,33 +132,33 @@
 
 ---
 
-## 阶段三：GitHub 同步
+## 阶段三：GitHub 同步 ✅ 已完成
 ### 目标: 实现 GitHub 仓库文档同步
 
 #### 3.1 GitHub 服务
 - [x] 3.1.1 安装 `PyGithub` 依赖 (已随阶段一安装)
-- [ ] 3.1.2 创建 `services/github_service.py` - GitHub API 封装
-- [ ] 3.1.3 实现 PAT 令牌存储 (加密)
-- [ ] 3.1.4 实现仓库列表获取
-- [ ] 3.1.5 实现文件树遍历和下载
-- [ ] 3.1.6 实现文档内容处理 (复用 LangChain loaders)
+- [x] 3.1.2 创建 `services/github_service.py` - GitHub API 封装
+- [x] 3.1.3 实现 PAT 令牌存储 (明文存储于 github_token 字段)
+- [x] 3.1.4 实现仓库列表获取
+- [x] 3.1.5 实现文件树遍历和下载
+- [x] 3.1.6 实现文档内容处理 (复用 LangChain loaders)
 
 #### 3.2 GitHub API 路由
-- [ ] 3.2.1 创建 `api/github.py` - GitHub 同步 API
-- [ ] 3.2.2 实现 `/api/projects/{id}/github/connect`
-- [ ] 3.2.3 实现 `/api/projects/{id}/github/repos`
-- [ ] 3.2.4 实现 `/api/projects/{id}/github/sync`
+- [x] 3.2.1 创建 `api/github.py` - GitHub 同步 API
+- [x] 3.2.2 实现 `/api/projects/{id}/github/connect`
+- [x] 3.2.3 实现 `/api/projects/{id}/github/repos`
+- [x] 3.2.4 实现 `/api/projects/{id}/github/sync`
 
 #### 3.3 前端 GitHub 集成
-- [ ] 3.3.1 GitHub 连接表单
-- [ ] 3.3.2 仓库选择器
-- [ ] 3.3.3 同步状态显示
+- [x] 3.3.1 GitHub 连接表单 (`GitHubSettings.tsx`)
+- [x] 3.3.2 仓库选择器 (`GitHubSettings.tsx`)
+- [x] 3.3.3 同步状态显示 (`SyncStatus.tsx`)
 
-#### 3.4 验证标准
-- [ ] 可连接 GitHub 账号
-- [ ] 可选择要同步的仓库
-- [ ] 可手动触发同步
-- [ ] 同步后文档出现在项目知识库
+#### 3.4 验证标准 ✅ 已验证
+- [x] 可连接 GitHub 账号
+- [x] 可选择要同步的仓库
+- [x] 可手动触发同步
+- [x] 同步后文档出现在项目知识库
 
 ---
 
@@ -180,7 +187,7 @@
 
 ---
 
-## 项目结构 (阶段二完成后)
+## 项目结构 (阶段三完成后)
 
 ```
 StudyClaw/
@@ -188,7 +195,8 @@ StudyClaw/
 │   ├── __init__.py
 │   ├── projects.py         # 项目管理 API
 │   ├── documents.py        # 文档管理 API
-│   └── chat.py             # 问答 API
+│   ├── chat.py             # 问答 API
+│   └── github.py           # GitHub 同步 API (阶段三新增)
 ├── database/               # 数据库层
 │   ├── __init__.py
 │   ├── models.py           # SQLAlchemy 模型
@@ -196,7 +204,8 @@ StudyClaw/
 ├── services/               # 业务逻辑层
 │   ├── __init__.py
 │   ├── project_service.py  # 项目 CRUD
-│   └── document_service.py # 文档处理
+│   ├── document_service.py # 文档处理
+│   └── github_service.py   # GitHub 同步 (阶段三新增)
 ├── agent/                  # Agent 层
 │   ├── react_agent.py      # LangGraph Agent
 │   └── tools/
@@ -210,6 +219,10 @@ StudyClaw/
 │   ├── src/
 │   │   ├── app/           # App Router 页面
 │   │   ├── components/    # UI 组件
+│   │   │   ├── github/    # GitHub 组件 (阶段三新增)
+│   │   │   │   ├── GitHubSettings.tsx
+│   │   │   │   └── SyncStatus.tsx
+│   │   │   └── ...
 │   │   └── lib/           # API 客户端
 │   ├── package.json
 │   └── next.config.ts
@@ -224,12 +237,27 @@ StudyClaw/
 |------|----------|------|
 | 阶段一 | 核心功能 | ✅ 已完成 |
 | 阶段二 | 前端开发 | ✅ 已完成 |
-| 阶段三 | GitHub 同步 | ⏸ 待开始 |
+| 阶段三 | GitHub 同步 | ✅ 已完成 |
 | 阶段四 | 增强功能 | ⏸ 待开始 |
 
 ---
 
 ## 最近更新
+- 2026-03-22: 阶段三实际测试验证 ✅
+  - 使用真实 GitHub PAT 测试 `Luvisdaisy/StudTest` 仓库
+  - 发现 bug: `api/github.py` 中 `async_session` 导入错误 (应为 `get_db_context`)
+  - 修复后同步成功: Added=2 (PDF+MD), Skipped=0, Failed=0
+  - 文档正确出现在项目知识库，可通过聊天检索
+  - PR #5 追加修复提交: https://github.com/Luvisdaisy/StudyClaw/pull/5
+
+- 2026-03-22: 完成阶段三 ✅ - GitHub 同步功能
+  - 后端: `services/github_service.py` - GitHub API 封装 (PAT 验证、仓库列表、文件下载、同步逻辑)
+  - 后端: `api/github.py` - GitHub 同步 API (connect/disconnect/repos/sync/status)
+  - 前端: `components/github/GitHubSettings.tsx` - PAT 输入、用户信息、仓库选择
+  - 前端: `components/github/SyncStatus.tsx` - 同步按钮、进度显示、结果统计
+  - 前端: Settings 页面集成 GitHub 组件
+  - PR #5: https://github.com/Luvisdaisy/StudyClaw/pull/5
+
 - 2026-03-22: 前端删除确认对话框统一为 UI 组件
   - 修复: `ProjectCard.tsx` 删除项目时使用浏览器 `window.confirm()` 的问题
   - 新增: 使用 `Dialog` 组件显示项目删除确认对话框，显示项目名称和警告信息

@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import projects_router, documents_router, chat_router
+from api import projects_router, documents_router, chat_router, github_router
 from database.session import init_db, close_db
 
 
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(chat_router)
+app.include_router(github_router)
 
 
 @app.get("/")
