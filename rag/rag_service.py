@@ -1,3 +1,5 @@
+import uuid
+from typing import Optional
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -7,9 +9,21 @@ from rag.vector_store import VectorStoreService
 from utils.prompt_loader import load_rag_prompts
 
 
-class RagSummarizeService(object):
-    def __init__(self):
-        self.vector_store = VectorStoreService()
+class RagService:
+    """
+    RAG service with project-level support.
+    Each project uses its own vector store collection.
+    """
+
+    def __init__(self, project_id: Optional[uuid.UUID] = None):
+        """
+        Initialize RAG service for a specific project.
+
+        Args:
+            project_id: UUID of the project. If None, uses default collection.
+        """
+        self.project_id = project_id
+        self.vector_store = VectorStoreService(project_id=project_id)
         self.retriever = self.vector_store.get_retriever()
         self.prompt_text = load_rag_prompts()
         self.prompt_template = PromptTemplate.from_template(self.prompt_text)
@@ -17,46 +31,47 @@ class RagSummarizeService(object):
         self.chain = self._init_chain()
 
     def _init_chain(self):
+        """Initialize the RAG chain"""
         chain = self.prompt_template | self.model | StrOutputParser()
         return chain
 
-    def retriever_docs(self, query) -> list[Document]:
+    def retrieve_docs(self, query: str) -> list[Document]:
+        """Retrieve relevant documents"""
         return self.retriever.invoke(query)
 
     def rag_summarize(self, query: str) -> str:
-        context_docs = self.retriever_docs(query)
+        """Synchronous RAG summarize"""
+        context_docs = self.retrieve_docs(query)
+        context = self._format_context(context_docs)
 
-        context = ""
-        counter = 0
-        for doc in context_docs:
-            counter += 1
-            context += f"【参考资料{counter}】: 参考资料：{doc.page_content} | 参考元数据：{doc.metadata}\n"
-
-        return self.chain.invoke(
-            {
-                "input": query,
-                "context": context,
-            }
-        )
+        return self.chain.invoke({
+            "input": query,
+            "context": context,
+        })
 
     async def arag_summarize(self, query: str) -> str:
-        context_docs = self.retriever_docs(query)
+        """Async RAG summarize"""
+        context_docs = self.retrieve_docs(query)
+        context = self._format_context(context_docs)
 
+        return await self.chain.ainvoke({
+            "input": query,
+            "context": context,
+        })
+
+    def _format_context(self, docs: list[Document]) -> str:
+        """Format documents as context string"""
         context = ""
-        counter = 0
-        for doc in context_docs:
-            counter += 1
-            context += f"【参考资料{counter}】: 参考资料：{doc.page_content} | 参考元数据：{doc.metadata}\n"
+        for i, doc in enumerate(docs, 1):
+            context += f"【参考资料{i}】: 参考资料：{doc.page_content} | 参考元数据：{doc.metadata}\n"
+        return context
 
-        return await self.chain.ainvoke(
-            {
-                "input": query,
-                "context": context,
-            }
-        )
+    def get_stats(self) -> dict:
+        """Get vector store statistics"""
+        return self.vector_store.get_collection_stats()
 
 
-if __name__ == "__main__":
-    rag = RagSummarizeService()
-
-    print(rag.rag_summarize("小户型适合哪些扫地机器人"))
+# Factory function for project-specific RAG
+def get_rag_service(project_id: Optional[uuid.UUID] = None) -> RagService:
+    """Get RAG service for a specific project"""
+    return RagService(project_id=project_id)

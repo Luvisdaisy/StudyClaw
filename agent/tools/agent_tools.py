@@ -1,12 +1,12 @@
 import os
 from utils.logger_handler import logger
 from langchain_core.tools import tool
-from rag.rag_service import RagSummarizeService
+from rag.rag_service import RagService
 import random
 from utils.config_handler import agent_cfg
 from utils.path_tool import get_abs_path
 
-rag = RagSummarizeService()
+rag = RagService()
 
 user_ids = [
     "1001",
