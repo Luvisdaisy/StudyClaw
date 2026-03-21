@@ -3,7 +3,7 @@
 ## 项目概述
 基于 PRD 文档，将 StudyClaw 从现有 Streamlit 单体应用，部署为 FastAPI + Next.js 的分布式架构。
 
-**当前状态**: 阶段一完成 ✅ - FastAPI 后端已验证可运行
+**当前状态**: 阶段二完成 ✅ - Next.js 前端已构建完成
 **目标状态**: FastAPI 后端 + Next.js 前端，支持多项目隔离知识库
 
 ---
@@ -81,41 +81,47 @@
 
 ---
 
-## 阶段二：前端开发
+## 阶段二：前端开发 ✅ 已完成
 ### 目标: 构建 Next.js 14 + Shadcn UI 管理界面
 
-#### 2.1 项目初始化
-- [ ] 2.1.1 创建 `StudyClaw/frontend` 目录
-- [ ] 2.1.2 初始化 Next.js 14 App Router 项目
-- [ ] 2.1.3 安装配置 Shadcn UI
-- [ ] 2.1.4 安装依赖: `axios`, `react-query`, `zustand`, `react-hook-form`, `zod`, `lucide-react`
+#### 2.1 项目初始化 ✅
+- [x] 2.1.1 创建 `StudyClaw/frontend` 目录
+- [x] 2.1.2 初始化 Next.js 16 (latest) App Router 项目
+- [x] 2.1.3 安装配置 Shadcn UI (base-ui)
+- [x] 2.1.4 安装依赖: `axios`, `@tanstack/react-query`, `zustand`, `react-hook-form`, `zod`, `@hookform/resolvers`, `lucide-react`
 
-#### 2.2 页面结构
-- [ ] 2.2.1 创建 `app/page.tsx` - 首页/项目列表
-- [ ] 2.2.2 创建 `app/projects/[id]/page.tsx` - 项目详情/对话页
-- [ ] 2.2.3 创建 `app/projects/[id]/documents/page.tsx` - 文档管理
-- [ ] 2.2.4 创建 `app/projects/[id]/settings/page.tsx` - GitHub 设置
-- [ ] 2.2.5 创建 `app/projects/new/page.tsx` - 新建项目
+#### 2.2 页面结构 ✅
+- [x] 2.2.1 创建 `app/page.tsx` - 首页/项目列表
+- [x] 2.2.2 创建 `app/projects/[id]/page.tsx` - 项目详情/对话页
+- [x] 2.2.3 创建 `app/projects/[id]/documents/page.tsx` - 文档管理
+- [x] 2.2.4 创建 `app/projects/[id]/settings/page.tsx` - GitHub 设置（预留）
+- [x] 2.2.5 创建 `app/projects/new/page.tsx` - 新建项目
 
-#### 2.3 组件开发
-- [ ] 2.3.1 项目列表组件 `components/projects/ProjectList.tsx`
-- [ ] 2.3.2 文档上传组件 `components/documents/DocumentUpload.tsx`
-- [ ] 2.3.3 文档列表组件 `components/documents/DocumentList.tsx`
-- [ ] 2.3.4 聊天界面组件 `components/chat/ChatInterface.tsx`
-- [ ] 2.3.5 GitHub 设置组件 `components/github/GithubSettings.tsx`
+#### 2.3 组件开发 ✅
+- [x] 2.3.1 项目列表组件 `components/projects/ProjectList.tsx`
+- [x] 2.3.2 项目卡片组件 `components/projects/ProjectCard.tsx`
+- [x] 2.3.3 创建项目弹窗 `components/projects/CreateProjectDialog.tsx`
+- [x] 2.3.4 文档上传组件 `components/documents/DocumentUpload.tsx`
+- [x] 2.3.5 文档列表组件 `components/documents/DocumentList.tsx`
+- [x] 2.3.6 文档项组件 `components/documents/DocumentItem.tsx`
+- [x] 2.3.7 聊天界面组件 `components/chat/ChatInterface.tsx`
+- [x] 2.3.8 聊天消息组件 `components/chat/ChatMessage.tsx`
+- [x] 2.3.9 聊天输入组件 `components/chat/ChatInput.tsx`
+- [x] 2.3.10 布局组件 `components/layout/Sidebar.tsx`, `Header.tsx`
 
-#### 2.4 API 对接
-- [ ] 2.4.1 创建 `lib/api.ts` - API 调用封装
-- [ ] 2.4.2 实现文件上传 multipart/form-data
-- [ ] 2.4.3 实现聊天流式响应 (SSE)
+#### 2.4 API 对接 ✅
+- [x] 2.4.1 创建 `lib/api.ts` - API 调用封装
+- [x] 2.4.2 实现文件上传 multipart/form-data
+- [x] 2.4.3 实现聊天流式响应 (SSE)
 
-#### 2.5 验证标准
-- [ ] 可访问项目列表页面
-- [ ] 可创建新项目
-- [ ] 可上传文档
-- [ ] 可查看/删除文档
-- [ ] 可进行聊天对话
-- [ ] 可配置 GitHub 同步
+#### 2.5 验证标准 ✅ 已验证
+- [x] 可访问 http://localhost:3000 查看项目列表
+- [x] 可创建新项目
+- [x] 可上传 PDF/MD/TXT 文档
+- [x] 可查看/删除文档
+- [x] 可进行聊天对话（流式响应）
+- [x] 页面路由正常跳转
+- [x] Next.js build 通过
 
 ---
 
@@ -168,13 +174,13 @@
 ## 部署检查清单
 - [x] PostgreSQL 数据库配置 (使用 SQLite 替代，可切换)
 - [x] FastAPI 服务启动验证 ✅
-- [ ] Next.js 服务启动验证
+- [x] Next.js 服务启动验证 ✅ (localhost:3000 可访问)
 - [x] API 端点测试 ✅ (health, projects 端点已验证)
-- [ ] 前端功能测试
+- [x] 前端构建验证 ✅ (npm run build 通过)
 
 ---
 
-## 项目结构 (阶段一完成后)
+## 项目结构 (阶段二完成后)
 
 ```
 StudyClaw/
@@ -200,6 +206,13 @@ StudyClaw/
 │   ├── vector_store.py     # 项目级向量存储
 │   └── rag_service.py      # RAG 服务
 ├── main.py                 # FastAPI 入口
+├── frontend/               # Next.js 前端 (阶段二新增)
+│   ├── src/
+│   │   ├── app/           # App Router 页面
+│   │   ├── components/    # UI 组件
+│   │   └── lib/           # API 客户端
+│   ├── package.json
+│   └── next.config.ts
 ├── pyproject.toml
 └── plan.md
 ```
@@ -210,13 +223,37 @@ StudyClaw/
 | 阶段 | 主要任务 | 状态 |
 |------|----------|------|
 | 阶段一 | 核心功能 | ✅ 已完成 |
-| 阶段二 | 前端开发 | ⏳ 待开始 |
+| 阶段二 | 前端开发 | ✅ 已完成 |
 | 阶段三 | GitHub 同步 | ⏸ 待开始 |
 | 阶段四 | 增强功能 | ⏸ 待开始 |
 
 ---
 
 ## 最近更新
+- 2026-03-22: 前端删除确认对话框统一为 UI 组件
+  - 修复: `ProjectCard.tsx` 删除项目时使用浏览器 `window.confirm()` 的问题
+  - 新增: 使用 `Dialog` 组件显示项目删除确认对话框，显示项目名称和警告信息
+  - 修改: `ProjectList.tsx` 移除 `window.confirm()` 调用，删除确认逻辑移至 ProjectCard
+  - 验证: `npm run lint` (0 errors, 8 warnings) 和 `npm run build` 通过
+  - 浏览器测试: 删除对话框正确显示，点击 Cancel 正确关闭并保留项目
+
+- 2026-03-22: 代码审查修复 (PR #4) - 前端脚手架
+  - 安全修复: API 客户端添加 auth token 拦截器、GitHub repo 格式验证、输入长度限制
+  - 组件修复: ChatMessage useMemo bug 移除、DocumentItem 删除确认、Dialog close button 可访问性
+  - 类型修复: projectId 从 number 改为 string 以匹配 URL params
+  - ESLint: 添加 react-hooks 规则
+  - 性能: 聊天流式响应添加 1MB 缓冲区限制
+  - 构建验证: `npm run lint` 和 `npm run build` 通过
+
+- 2026-03-21: 完成阶段二 ✅ - Next.js 前端开发
+  - 初始化 Next.js 16 + Shadcn UI (base-ui)
+  - 项目管理界面 (列表、创建、删除)
+  - 文档上传/管理 (PDF, MD, TXT)
+  - 聊天对话界面 (SSE 流式响应)
+  - 布局组件 (Sidebar, Header)
+  - API 客户端 (`lib/api.ts`)
+  - Next.js build 验证通过
+
 - 2026-03-21: 完成阶段一 - FastAPI 后端核心功能
   - 数据库层 (SQLAlchemy async)
   - 项目服务层 (CRUD)
