@@ -1,9 +1,17 @@
 import uuid
+import logging
 from typing import Optional
 from langchain_core.documents import Document
 from langchain_core.tools import tool
 from rag.vector_store import VectorStoreService
 from utils.prompt_loader import load_rag_prompts
+
+logger = logging.getLogger(__name__)
+
+
+class RetrievalError(Exception):
+    """Raised when document retrieval fails."""
+    pass
 
 
 class ProjectRagService:
@@ -17,6 +25,7 @@ class ProjectRagService:
 
     def retrieve_docs(self, query: str, k: int = 3) -> list[Document]:
         """Retrieve relevant documents for a query"""
+        self.retriever.search_kwargs["k"] = k
         return self.retriever.invoke(query)
 
     def format_context(self, query: str) -> str:
@@ -67,7 +76,8 @@ def rag_summarize(query: str, project_id: str) -> str:
         context = rag_service.format_context(query)
         return f"检索到的上下文:\n{context}"
     except Exception as e:
-        return f"检索文档时出错: {str(e)}"
+        logger.error(f"Document retrieval failed in rag_summarize: {e}", exc_info=True)
+        raise RetrievalError(f"Failed to retrieve documents: {e}") from e
 
 
 @tool
@@ -96,4 +106,5 @@ def rag_retrieve(query: str, project_id: str, k: int = 3) -> str:
             result += f"来源: {doc.metadata.get('source', 'unknown')}\n\n"
         return result
     except Exception as e:
-        return f"检索文档时出错: {str(e)}"
+        logger.error(f"Document retrieval failed in rag_retrieve: {e}", exc_info=True)
+        raise RetrievalError(f"Failed to retrieve documents: {e}") from e

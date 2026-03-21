@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,6 +7,8 @@ from pydantic import BaseModel
 
 from database.session import get_db
 from services.project_service import ProjectService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -126,8 +129,8 @@ async def delete_project(
         from rag.vector_store import VectorStoreService
         vs = VectorStoreService(project_id=project_id)
         vs.delete_all()
-    except Exception:
-        pass  # Continue even if cleanup fails
+    except Exception as e:
+        logger.warning(f"Vector store cleanup failed: {e}, continuing anyway")
 
     success = await service.delete_project(project_id)
     if not success:

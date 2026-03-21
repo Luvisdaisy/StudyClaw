@@ -1,9 +1,12 @@
+import logging
 import uuid
 from typing import Optional
 from langchain_core.documents import Document as LCDocument
 from langchain_chroma import Chroma
 from utils.config_handler import chroma_cfg
 from model.factory import embedding_model
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStoreService:
@@ -59,22 +62,22 @@ class VectorStoreService:
     def delete_by_document_id(self, document_id: str):
         """Delete all chunks associated with a document ID"""
         try:
-            # Get all IDs with matching document_id in metadata
             collection = self.vector_store._collection
             if collection is None:
                 return
 
-            # Get all metadatas and filter
-            ids_to_delete = []
-            for idx, metadata in enumerate(collection.get(include=["metadatas"])["metadatas"]):
-                if metadata and metadata.get("document_id") == document_id:
-                    ids_to_delete.append(collection.get(include=[])["ids"][idx])
+            # Use server-side filtering with where clause
+            result = collection.get(
+                where={"document_id": document_id},
+                include=[]
+            )
+            ids_to_delete = result.get("ids", [])
 
             if ids_to_delete:
                 self.vector_store.delete(ids_to_delete)
         except Exception as e:
             # Log error but don't raise - deletion failure shouldn't block document deletion
-            print(f"Warning: Failed to delete vectors for document {document_id}: {e}")
+            logger.warning(f"Failed to delete vectors for document {document_id}: {e}")
 
     def delete_all(self):
         """Delete all documents from the collection"""

@@ -12,6 +12,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./studyclaw.db")
 # For PostgreSQL:
 # DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/studyclaw")
 
+
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enable foreign key support for SQLite"""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 # Create async engine
 if "sqlite" in DATABASE_URL:
     engine = create_async_engine(
@@ -19,6 +27,9 @@ if "sqlite" in DATABASE_URL:
         echo=False,
         poolclass=NullPool,
     )
+    # Enable foreign keys for SQLite
+    from sqlalchemy import event
+    event.listen(engine.sync_engine, "connect", _set_sqlite_pragma)
 else:
     engine = create_async_engine(
         DATABASE_URL,

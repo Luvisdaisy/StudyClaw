@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import json
 from fastapi import APIRouter, Depends, HTTPException
@@ -46,7 +47,10 @@ async def chat(
 
     async def generate():
         try:
-            for chunk in agent.execute_stream(request.message, session_id=session_id):
+            loop = asyncio.get_event_loop()
+            for chunk in await loop.run_in_executor(
+                None, agent.execute_stream, request.message, session_id
+            ):
                 if chunk:
                     # Send as SSE format
                     yield f"data: {json.dumps({'content': chunk})}\n\n"

@@ -8,6 +8,9 @@ from database.session import get_db
 from services.document_service import DocumentService
 from services.project_service import ProjectService
 from database.models import Document
+from utils.logger_handler import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -67,9 +70,8 @@ async def upload_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}\n{traceback.format_exc()}")
+        logger.error(f"Document processing failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process document")
 
 
 @router.get("/projects/{project_id}/documents", response_model=DocumentListResponse)

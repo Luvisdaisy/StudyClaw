@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 import hashlib
@@ -12,6 +13,8 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader, Unstru
 from database.models import Document, DocumentStatus
 from utils.config_handler import chroma_cfg
 from model.factory import embedding_model
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
@@ -63,8 +66,9 @@ class DocumentService:
         if existing.scalar_one_or_none():
             raise ValueError(f"Document {filename} already exists in this project")
 
-        # Save file to disk
-        file_path = self.data_dir / f"{uuid.uuid4()}_{filename}"
+        # Save file to disk - use server-generated filename to prevent path traversal
+        safe_filename = f"{uuid.uuid4()}.{file_type}"
+        file_path = self.data_dir / safe_filename
         with open(file_path, "wb") as f:
             f.write(file_content)
 
@@ -129,9 +133,9 @@ class DocumentService:
             await self.session.flush()
             await self.session.refresh(doc)
 
-            # Run synchronous document processing (direct call, not thread)
-            # This is safe because LangChain operations are synchronous
-            chunk_count = self._sync_process_document(
+            # Run synchronous document processing in thread pool to avoid blocking event loop
+            chunk_count = await asyncio.to_thread(
+                self._sync_process_document,
                 str(file_path),
                 file_type,
                 str(doc.id),
@@ -144,9 +148,11 @@ class DocumentService:
             await self.session.flush()
             await self.session.commit()
 
-        except Exception as e:
-            # Rollback happens automatically when session is closed
-            raise e
+        except Exception:
+            await self.session.rollback()
+            doc.status = DocumentStatus.FAILED
+            await self.session.commit()
+            raise
 
     async def list_documents(self) -> list[Document]:
         """List all documents in project"""
@@ -184,8 +190,8 @@ class DocumentService:
 
             vector_store = VectorStoreService(project_id=self.project_id)
             vector_store.delete_by_document_id(str(document_id))
-        except Exception:
-            pass  # Continue even if vector delete fails
+        except Exception as e:
+            logger.warning(f"Vector delete failed for document {document_id}: {e}, continuing anyway")
 
         # Delete record
         await self.session.execute(
