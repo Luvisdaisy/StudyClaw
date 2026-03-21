@@ -39,9 +39,10 @@ logs/
 *.log
 
 # Database
-data/uploads/
+data/
 chroma_db/
 *.sqlite3
+*.db
 
 # Environment
 .env
@@ -50,4 +51,6 @@ chroma_db/
 # OS
 .DS_Store
 Thumbs.db
-.claude
+
+# Doc
+.claude/
