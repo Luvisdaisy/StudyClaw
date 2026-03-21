@@ -1,11 +1,12 @@
-import asyncio
-from typing import TypedDict, Annotated, Sequence
+import uuid
+from typing import TypedDict, Annotated, Sequence, Optional
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langgraph.graph.message import add_messages
 
+from agent.tools.rag_tool import get_rag_service, rag_summarize, rag_retrieve
 from agent.tools.agent_tools import (
     get_current_month,
     get_weather,
@@ -13,30 +14,25 @@ from agent.tools.agent_tools import (
     get_user_id,
     fetch_external_data,
     fill_context_for_report,
-    rag_summarize,
-)
-from agent.tools.middleware import (
-    log_before_model_node,
-    log_after_model_node,
-    should_use_report_prompt,
-    get_prompt_for_context,
 )
 from model.factory import chat_model
 from utils.prompt_loader import load_system_prompts, load_report_prompts
 
 
 class AgentState(TypedDict):
-    """Agent 状态定义"""
+    """Agent state definition"""
     messages: Annotated[Sequence[BaseMessage], add_messages]
     context: dict
+    project_id: Optional[str]
 
 
-def create_langgraph_agent():
-    """创建自定义 LangGraph Agent"""
+def create_langgraph_agent(project_id: Optional[str] = None):
+    """Create a LangGraph agent with project context"""
 
-    # 定义工具列表
+    # Build tools list
     tools = [
         rag_summarize,
+        rag_retrieve,
         get_weather,
         get_user_location,
         get_user_id,
@@ -45,67 +41,72 @@ def create_langgraph_agent():
         fill_context_for_report,
     ]
 
-    # 创建工具节点
+    # Create tool node
     tool_node = ToolNode(tools)
 
     def call_model_node(state: AgentState) -> AgentState:
-        """模型调用节点 - 根据 context 选择提示词"""
+        """Model call node - select prompt based on context"""
         context = state.get("context", {})
 
-        # 根据 context 选择提示词
+        # Select prompt based on context
         if context.get("report", False):
             system_prompt = load_report_prompts()
         else:
             system_prompt = load_system_prompts()
 
-        # 构建带系统提示的消息
+        # Add project context to system prompt
+        if project_id:
+            system_prompt = f"{system_prompt}\n\n[System] Current project ID: {project_id}"
+
+        # Build message with system prompt
         system_msg = SystemMessage(content=system_prompt)
-        response = chat_model.bind_tools(tools).invoke([system_msg] + list(state["messages"]))
+        response = chat_model.bind_tools(tools).invoke(
+            [system_msg] + list(state["messages"])
+        )
 
         return {"messages": [response]}
 
     def should_continue(state: AgentState) -> str:
-        """条件边：判断是否需要工具调用"""
+        """Conditional edge: check if tool call is needed"""
         messages = state["messages"]
         last_message = messages[-1]
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tools"
         return "end"
 
-    # 构建图
+    # Build graph
     builder = StateGraph(AgentState)
 
-    # 添加节点
-    builder.add_node("log_before_model", log_before_model_node)
+    # Add nodes
     builder.add_node("model", call_model_node)
     builder.add_node("tools", tool_node)
-    builder.add_node("log_after_model", log_after_model_node)
 
-    # 添加边
-    builder.add_edge(START, "log_before_model")
-    builder.add_edge("log_before_model", "model")
+    # Add edges
+    builder.add_edge(START, "model")
 
-    # 条件边：判断是否需要工具调用
-    builder.add_conditional_edges("model", should_continue, {"tools": "tools", "end": "log_after_model"})
-    builder.add_edge("tools", "model")  # 工具执行后回到模型
+    # Conditional edge: determine if tool call is needed
+    builder.add_conditional_edges(
+        "model",
+        should_continue,
+        {"tools": "tools", "end": END}
+    )
+    builder.add_edge("tools", "model")  # After tool execution, back to model
 
-    # 后置日志后结束
-    builder.add_edge("log_after_model", END)
-
-    # 编译并添加 checkpointer
+    # Compile with checkpointer for session persistence
     checkpointer = MemorySaver()
     return builder.compile(checkpointer=checkpointer)
 
 
 class ReactAgent:
-    """React Agent 类 - 使用自定义 StateGraph"""
+    """React Agent class with project support"""
 
-    def __init__(self):
-        self.agent = create_langgraph_agent()
+    def __init__(self, project_id: Optional[str] = None):
+        self.project_id = project_id
+        self.agent = create_langgraph_agent(project_id)
         self._context = {"report": False}
 
     def _update_context_from_tool_calls(self, messages: list[BaseMessage]) -> None:
-        """从消息中提取工具调用并更新上下文"""
+        """Extract tool calls from messages and update context"""
         for msg in messages:
             if isinstance(msg, AIMessage) and hasattr(msg, "tool_calls"):
                 if msg.tool_calls:
@@ -115,47 +116,32 @@ class ReactAgent:
                             return
 
     def execute_stream(self, query: str, session_id: str = "default"):
-        """流式执行查询"""
-        # 根据上下文获取适当的提示词
-        prompt = get_prompt_for_context(self._context)
-
-        # 构建消息
+        """Execute query with streaming"""
+        # Build messages
         messages = [HumanMessage(content=query)]
 
-        # 使用 session_id 作为 thread_id 实现会话持久化
+        # Use session_id as thread_id for session persistence
         config = {"configurable": {"thread_id": session_id}}
 
-        # 如果有系统提示词，先添加
-        if prompt:
-            # 检查是否已有系统消息
-            if not any(isinstance(m, SystemMessage) for m in []):
-                # 在消息前添加系统提示
-                messages.insert(0, SystemMessage(content=prompt))
+        # Prepare state with project context
+        state = {
+            "messages": messages,
+            "context": self._context,
+            "project_id": self.project_id,
+        }
 
         try:
-            # 流式执行
-            for chunk in self.agent.stream(
-                {"messages": messages, "context": self._context},
-                config=config,
-            ):
-                # 处理每个 chunk
+            # Stream execution
+            for chunk in self.agent.stream(state, config=config):
+                # Handle messages output
                 if "messages" in chunk:
                     latest_message = chunk["messages"][-1]
                     if hasattr(latest_message, "content") and latest_message.content:
-                        # 检查是否有工具调用，更新上下文
                         if isinstance(latest_message, AIMessage):
                             self._update_context_from_tool_calls([latest_message])
                         yield latest_message.content.strip() + "\n"
 
-                # 处理 agent 节点的输出
-                if "agent" in chunk:
-                    agent_output = chunk["agent"]
-                    if "messages" in agent_output:
-                        latest_message = agent_output["messages"][-1]
-                        if hasattr(latest_message, "content") and latest_message.content:
-                            yield latest_message.content.strip() + "\n"
-
-                # 处理 model 节点的输出
+                # Handle model node output
                 if "model" in chunk:
                     model_output = chunk["model"]
                     if "messages" in model_output:
@@ -166,30 +152,46 @@ class ReactAgent:
         except Exception as e:
             yield f"Error: {str(e)}"
 
-    def execute_stream_with_context(self, query: str, session_id: str = "default", context: dict = None):
-        """带上下文的流式执行查询（用于报告生成）"""
+    def execute_stream_with_context(
+        self,
+        query: str,
+        session_id: str = "default",
+        context: dict = None
+    ):
+        """Execute with custom context (for report generation)"""
         if context:
             self._context = context
-
         return self.execute_stream(query, session_id)
 
     def reset_context(self):
-        """重置上下文"""
+        """Reset context"""
         self._context = {"report": False}
 
+    def set_project(self, project_id: str):
+        """Switch to a different project"""
+        self.project_id = project_id
+        self.agent = create_langgraph_agent(project_id)
 
-if __name__ == "__main__":
-    agent = ReactAgent()
 
-    # 测试正常对话
-    print("=== 测试正常对话 ===")
-    for chunk in agent.execute_stream("你好，请介绍一下你自己"):
-        print(chunk, end="", flush=True)
+class ProjectAgentFactory:
+    """Factory for creating project-specific agents"""
 
-    print("\n" + "=" * 50)
+    _agents: dict[str, ReactAgent] = {}
 
-    # 测试报告生成
-    print("=== 测试报告生成 ===")
-    agent.reset_context()
-    for chunk in agent.execute_stream("给我生成我的使用报告"):
-        print(chunk, end="", flush=True)
+    @classmethod
+    def get_agent(cls, project_id: str) -> ReactAgent:
+        """Get or create agent for a project"""
+        if project_id not in cls._agents:
+            cls._agents[project_id] = ReactAgent(project_id=project_id)
+        return cls._agents[project_id]
+
+    @classmethod
+    def clear_agent(cls, project_id: str):
+        """Remove agent for a project"""
+        if project_id in cls._agents:
+            del cls._agents[project_id]
+
+    @classmethod
+    def clear_all(cls):
+        """Clear all cached agents"""
+        cls._agents.clear()
