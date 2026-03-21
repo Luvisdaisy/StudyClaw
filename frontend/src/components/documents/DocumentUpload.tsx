@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DocumentUploadProps {
-  projectId: number;
+  projectId: string;
 }
 
 const ALLOWED_TYPES = [

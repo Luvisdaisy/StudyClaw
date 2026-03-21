@@ -57,6 +57,12 @@ export function CreateProjectDialog() {
       return;
     }
 
+    // Validate GitHub repo format if provided
+    if (githubRepo && !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(githubRepo)) {
+      setError("Invalid GitHub repository format. Use owner/repo format.");
+      return;
+    }
+
     mutation.mutate();
   };
 
@@ -83,6 +89,7 @@ export function CreateProjectDialog() {
               placeholder="My Study Project"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              maxLength={200}
             />
           </div>
           <div className="space-y-2">
@@ -94,6 +101,7 @@ export function CreateProjectDialog() {
               placeholder="A brief description of your project..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={1000}
             />
           </div>
           <div className="space-y-2">
@@ -105,6 +113,7 @@ export function CreateProjectDialog() {
               placeholder="owner/repo"
               value={githubRepo}
               onChange={(e) => setGithubRepo(e.target.value)}
+              maxLength={200}
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}

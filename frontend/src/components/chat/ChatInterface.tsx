@@ -10,6 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const MAX_STREAMING_BUFFER_SIZE = 1024 * 1024; // 1MB limit
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -17,7 +19,7 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  projectId: number;
+  projectId: string;
 }
 
 export function ChatInterface({ projectId }: ChatInterfaceProps) {
@@ -62,6 +64,11 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
 
       try {
         await chatApi.sendMessage(projectId, message, (chunk) => {
+          // Check buffer size limit to prevent memory exhaustion
+          if (streamingContentRef.current.length + chunk.length > MAX_STREAMING_BUFFER_SIZE) {
+            setError("Response too large. Please try a shorter message.");
+            throw new Error("Response buffer overflow");
+          }
           streamingContentRef.current += chunk;
           // Update the assistant message with accumulated content
           setMessages((prev) =>
@@ -73,7 +80,9 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
           );
         });
       } catch (err) {
-        setError("Failed to send message. Please try again.");
+        if (!err || !(err instanceof Error && err.message === "Response buffer overflow")) {
+          setError("Failed to send message. Please try again.");
+        }
       } finally {
         setIsStreaming(false);
       }

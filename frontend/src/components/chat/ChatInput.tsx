@@ -54,6 +54,7 @@ export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps
         className="min-h-[44px] max-h-[200px] resize-none"
         disabled={isLoading || disabled}
         rows={1}
+        maxLength={10000}
       />
       <Button
         type="submit"

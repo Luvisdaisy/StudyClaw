@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { User, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,20 +13,10 @@ interface ChatMessageProps {
 export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
   const isUser = role === "user";
 
-  const formattedContent = useMemo(() => {
-    // Simple markdown-like formatting
-    return content
-      .split("\n")
-      .map((line, i) => (
-        <span key={i}>
-          {line}
-          {i < content.split("\n").length - 1 && <br />}
-        </span>
-      ));
-  }, [content]);
-
   return (
     <div
+      role="article"
+      aria-label={`${isUser ? "User" : "Assistant"} message`}
       className={cn(
         "flex gap-4 py-4",
         isUser ? "flex-row-reverse" : "flex-row"
@@ -49,7 +38,12 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
       >
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <p className="whitespace-pre-wrap">
-            {formattedContent}
+            {content.split("\n").map((line, i) => (
+              <span key={i}>
+                {line}
+                {i < content.split("\n").length - 1 && <br />}
+              </span>
+            ))}
             {isStreaming && (
               <span className="animate-pulse">▊</span>
             )}

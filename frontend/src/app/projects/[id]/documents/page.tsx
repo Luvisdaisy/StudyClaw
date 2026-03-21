@@ -20,7 +20,7 @@ export default function DocumentsPage() {
   if (error) {
     return (
       <div className="flex h-screen">
-        <Sidebar projectId={projectId} />
+        <Sidebar projectId={projectId} projectName={project?.name} />
         <main className="flex-1 flex flex-col">
           <Header title="Error" />
           <div className="flex-1 flex items-center justify-center">

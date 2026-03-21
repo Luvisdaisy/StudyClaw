@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Trash2, Download } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import type { Document } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,30 +11,40 @@ interface DocumentItemProps {
   onDelete: (id: number) => void;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function getFileTypeLabel(fileType: string): string {
+  const typeMap: Record<string, string> = {
+    "application/pdf": "PDF",
+    "text/markdown": "Markdown",
+    "text/plain": "Text",
+    "text/x-markdown": "Markdown",
+  };
+  return typeMap[fileType] || fileType.split("/").pop() || "Unknown";
+}
+
 export function DocumentItem({ document, onDelete }: DocumentItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleDelete = () => {
+    setShowConfirm(true);
+  };
+
+  const confirmDelete = () => {
     setIsDeleting(true);
+    setShowConfirm(false);
     onDelete(document.id);
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getFileTypeLabel = (fileType: string): string => {
-    const typeMap: Record<string, string> = {
-      "application/pdf": "PDF",
-      "text/markdown": "Markdown",
-      "text/plain": "Text",
-      "text/x-markdown": "Markdown",
-    };
-    return typeMap[fileType] || fileType.split("/").pop() || "Unknown";
+  const cancelDelete = () => {
+    setShowConfirm(false);
   };
 
   return (
@@ -57,15 +67,36 @@ export function DocumentItem({ document, onDelete }: DocumentItemProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleDelete}
-          disabled={isDeleting}
-          className="text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        {showConfirm ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelDelete}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );

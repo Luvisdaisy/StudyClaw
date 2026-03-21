@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 
 interface DocumentListProps {
-  projectId: number;
+  projectId: string;
 }
 
 export function DocumentList({ projectId }: DocumentListProps) {
