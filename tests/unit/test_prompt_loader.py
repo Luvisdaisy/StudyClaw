@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from utils.prompt_loader import load_prompt, load_system_prompts, load_rag_prompts, load_report_prompts
+from utils.prompt_loader import load_prompt, load_system_prompts, load_rag_prompts
 
 
 class TestLoadPrompt:
@@ -33,17 +33,6 @@ class TestLoadPrompt:
 
         assert result == "RAG prompt content"
 
-    @patch("utils.prompt_loader.prompts_cfg", {"report_prompt_path": "prompts/report_prompts.txt"})
-    @patch("utils.prompt_loader.get_abs_path")
-    @patch("builtins.open", create=True)
-    def test_load_prompt_report_success(self, mock_open, mock_get_abs_path):
-        """Test loading report prompt successfully."""
-        mock_get_abs_path.return_value = "/path/to/prompts/report_prompts.txt"
-        mock_open.return_value.__enter__.return_value.read.return_value = "Report prompt content"
-
-        result = load_prompt("report")
-
-        assert result == "Report prompt content"
 
     @patch("utils.prompt_loader.prompts_cfg", {})
     def test_load_prompt_missing_key(self):
@@ -86,12 +75,3 @@ class TestBackwardCompatibility:
         assert result == "RAG prompt"
         mock_load_prompt.assert_called_once_with("rag")
 
-    @patch("utils.prompt_loader.load_prompt")
-    def test_load_report_prompts(self, mock_load_prompt):
-        """Test load_report_prompts calls load_prompt with 'report'."""
-        mock_load_prompt.return_value = "Report prompt"
-
-        result = load_report_prompts()
-
-        assert result == "Report prompt"
-        mock_load_prompt.assert_called_once_with("report")

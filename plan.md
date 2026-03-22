@@ -162,7 +162,73 @@
 
 ---
 
-## 阶段四：增强功能 (后续迭代)
+## 阶段四：Agent & RAG 优化 (进行中)
+### 目标: 修复 RAG 检索问题，优化 Agent 角色定位，添加网络搜索能力
+
+#### 4.1 RAG 检索问题修复 ✅
+- [x] 4.1.1 修复 Chroma `agent` collection dimension=null 问题
+  - 已删除无效 agent collection
+  - 确保创建时传入正确的 embedding function
+- [x] 4.1.2 修复 `ProjectRagService` 缓存问题
+  - 移除 `agent/tools/rag_tool.py` 中的全局缓存
+  - 每次请求创建新实例或实现缓存刷新机制
+- [x] 4.1.3 增大 chunk_size: 200 → 500
+
+#### 4.2 Agent 提示词重写 ✅
+- [x] 4.2.1 重写 `prompts/main_prompts.txt` 为通用 AI 学习助手角色
+- [x] 4.2.2 清理废弃模拟工具
+  - 移除: `get_weather`, `get_user_location`, `get_user_id`, `get_current_month`
+  - 移除: `fill_context_for_report`, `fetch_external_data`
+  - 删除废弃的 `prompts/report_prompts.txt`
+
+#### 4.3 网络搜索工具 ✅
+- [x] 4.3.1 创建 `agent/tools/web_search_tool.py` - BraveSearch 集成
+- [x] 4.3.2 在 `ChatRequest` 添加 `enable_web_search: bool = False` 字段
+- [x] 4.3.3 Agent 根据 `enable_web_search` 参数决定是否启用网络搜索
+
+#### 4.4 Session 持久化 ✅ 已完成
+- [x] 4.4.1 添加 Redis 依赖 (`redis>=5.0.0`, `psycopg2-binary>=2.9.0`)
+- [x] 4.4.2 创建 Redis 连接配置 (`config/session.yml`)
+- [x] 4.4.3 实现 SessionManager (`session_store/manager.py`)
+  - Redis 主存储 (TTL=7天)
+  - PostgreSQL 异步批量备份
+  - 定时同步 (60秒间隔 或 100条触发)
+- [x] 4.4.4 PostgreSQL 表创建 (`agent_sessions` JSONB)
+- [x] 4.4.5 LangGraph Checkpoint 适配器 (`session_store/checkpoint.py`)
+- [x] 4.4.6 修改 `agent/react_agent.py` 使用 SessionCheckpointSaver
+- [x] 4.4.7 初始化/关闭逻辑 (`main.py` lifespan)
+- [x] 4.4.8 创建 `docker-compose.yml` (PostgreSQL + Redis)
+
+#### 4.5 配置统一 ✅
+- [x] 4.5.1 合并 `config/rag.yml` 和 `config/chroma.yml`
+- [x] 4.5.2 删除废弃的 `config/chroma.yml`
+
+#### 4.6 验证标准
+- [x] RAG 检索能正确返回上传文档内容
+- [x] Agent 扮演通用学习助手角色
+- [x] 联网开关可控制网络搜索
+- [x] Session 持久化实现 (Redis + PostgreSQL 备份)
+
+#### 4.7 测试计划 ✅ 已创建
+- [x] `tests/session_store/conftest.py` - 共享 fixtures (mock Redis/PostgreSQL clients)
+- [x] `tests/session_store/test_redis_store.py` - RedisStore 单元测试
+- [x] `tests/session_store/test_postgres_store.py` - PostgresStore 单元测试
+- [x] `tests/session_store/test_manager.py` - SessionManager 单元测试
+- [x] `tests/session_store/test_checkpoint.py` - SessionCheckpointSaver 测试
+- [x] `tests/session_store/test_integration.py` - 集成测试 (需 Redis + PostgreSQL)
+
+**运行测试**：
+```bash
+# 单元测试 (无需外部服务)
+pytest tests/session_store/
+
+# 集成测试 (需 Redis + PostgreSQL)
+pytest tests/session_store/test_integration.py --integration
+```
+
+---
+
+## 阶段五：增强功能 (后续迭代)
 - [ ] NotebookLM Audio Overview 功能
 - [ ] 文档版本管理
 - [ ] 协作功能
@@ -173,7 +239,8 @@
 ## 技术债务清理
 - [x] 移除 Streamlit 相关代码 (uv sync 自动移除)
 - [x] 更新 `pyproject.toml` 依赖
-- [ ] 更新 `.env.example`
+- [x] 创建 `docker-compose.yml` (PostgreSQL + Redis)
+- [x] 更新 `.env.example` (添加 BRAVE_SEARCH_API_KEY, Redis, PostgreSQL 配置)
 - [ ] 更新 `README.md`
 
 ---
@@ -184,6 +251,9 @@
 - [x] Next.js 服务启动验证 ✅ (localhost:3000 可访问)
 - [x] API 端点测试 ✅ (health, projects 端点已验证)
 - [x] 前端构建验证 ✅ (npm run build 通过)
+- [x] docker-compose.yml 已创建 (PostgreSQL + Redis)
+- [ ] Docker 镜像检查：创建服务前先 `docker images` 确认本地无镜像再 pull
+- [ ] Docker Compose 服务验证 (PostgreSQL + Redis)
 
 ---
 
@@ -191,6 +261,7 @@
 
 ```
 StudyClaw/
+├── docker-compose.yml      # Docker Compose 配置 (PostgreSQL + Redis)
 ├── api/                    # FastAPI 路由
 │   ├── __init__.py
 │   ├── projects.py         # 项目管理 API
@@ -210,10 +281,20 @@ StudyClaw/
 │   ├── react_agent.py      # LangGraph Agent
 │   └── tools/
 │       ├── rag_tool.py     # 项目级 RAG 工具
-│       └── ...
+│       └── web_search_tool.py  # BraveSearch 网络搜索工具 (阶段四新增)
+│       └── agent_tools.py  # 废弃工具 (待清理)
 ├── rag/                    # RAG 层
 │   ├── vector_store.py     # 项目级向量存储
 │   └── rag_service.py      # RAG 服务
+├── session_store/          # Session 持久化层 (阶段四新增)
+│   ├── __init__.py
+│   ├── redis_store.py      # Redis 存储 (TTL=7天)
+│   ├── postgres_store.py   # PostgreSQL 备份
+│   ├── manager.py          # 统一接口 + 异步批量
+│   └── checkpoint.py       # LangGraph Checkpoint 适配器
+├── config/
+│   ├── session.yml         # Session 配置
+│   └── rag.yml             # RAG 配置
 ├── main.py                 # FastAPI 入口
 ├── frontend/               # Next.js 前端 (阶段二新增)
 │   ├── src/
@@ -238,11 +319,45 @@ StudyClaw/
 | 阶段一 | 核心功能 | ✅ 已完成 |
 | 阶段二 | 前端开发 | ✅ 已完成 |
 | 阶段三 | GitHub 同步 | ✅ 已完成 |
-| 阶段四 | 增强功能 | ⏸ 待开始 |
+| 阶段四 | Agent & RAG 优化 | ✅ 已完成 |
+| 阶段五 | 增强功能 | ⏸ 待开始 |
 
 ---
 
 ## 最近更新
+- 2026-03-22: 阶段四完成 - Session 持久化实现
+  - ✅ 创建 session_store 模块 (Redis + PostgreSQL 双存储)
+  - ✅ session_store/redis_store.py - Redis 主存储 (TTL=7天)
+  - ✅ session_store/postgres_store.py - PostgreSQL 异步批量备份
+  - ✅ session_store/manager.py - 统一接口 + 定时批量同步
+  - ✅ session_store/checkpoint.py - LangGraph Checkpoint 适配器
+  - ✅ config/session.yml - Session 配置
+  - ✅ agent/react_agent.py - 使用 SessionCheckpointSaver
+  - ✅ main.py - SessionManager 初始化/关闭逻辑
+  - ✅ .env.example - 添加 SESSION_BATCH_INTERVAL, SESSION_BATCH_SIZE
+
+- 2026-03-22: 阶段四实施 - Agent & RAG 优化 (第一部分)
+  - ✅ 修复 RAG: chunk_size 500, 删除无效 agent collection
+  - ✅ 重写提示词: 通用 AI 学习助手角色, 删除扫地机器人客服提示词
+  - ✅ 清理废弃工具: get_weather, get_user_location, get_user_id, get_current_month, fetch_external_data, fill_context_for_report
+  - ✅ 实现 BraveSearch 网络搜索工具
+  - ✅ 添加 enable_web_search 参数到 ChatRequest
+  - ✅ 合并 rag.yml 和 chroma.yml 到 config/rag.yml
+  - ✅ 创建 docker-compose.yml (PostgreSQL + Redis)
+  - ✅ 更新 .env.example (BRAVE_SEARCH_API_KEY, Redis, PostgreSQL)
+  - ✅ 更新 pyproject.toml (redis, psycopg2-binary, requests)
+
+- 2026-03-22: 阶段四启动 - Agent & RAG 优化
+  - 分析发现 RAG 检索问题：`agent` collection dimension=null 导致检索失败
+  - 发现 Agent 提示词是"扫地机器人客服"场景，与项目定位不符
+  - 发现 `_rag_services` 缓存未刷新问题
+  - 用户确认决策：
+    - 报告生成功能：移除
+    - Chunk size：增大到 500
+    - 网络搜索：需要，提供对话层面开关
+  - Session 持久化：PostgreSQL + Redis
+  - 阶段四计划已添加到 plan.md
+
 - 2026-03-22: 阶段三实际测试验证 ✅
   - 使用真实 GitHub PAT 测试 `Luvisdaisy/StudTest` 仓库
   - 发现 bug: `api/github.py` 中 `async_session` 导入错误 (应为 `get_db_context`)

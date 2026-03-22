@@ -43,6 +43,22 @@
 | 手动同步 | 用户触发同步操作 | P1 |
 | 文档处理 | 自动处理仓库中的文档 | P1 |
 
+### 2.4 Agent 能力
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 通用学习助手 | 基于项目文档回答问题的 AI 助手 | P0 |
+| RAG 检索 | 从项目知识库检索相关文档 | P0 |
+| 网络搜索 | 当文档检索不足时联网搜索（可选开关） | P1 |
+| Session 持久化 | 跨请求保持对话历史 | P1 |
+
+### 2.5 对话控制
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 联网开关 | 每次对话可选启用网络搜索 | P1 |
+| 流式响应 | SSE 实时返回 Agent 思考过程 | P0 |
+
 ---
 
 ## 3. 技术架构
@@ -58,9 +74,12 @@
 | **向量数据库** | Chroma | 每个项目独立 collection |
 | **元数据存储** | PostgreSQL | 项目、文档等元数据 |
 | **Agent 框架** | LangGraph | ReAct Agent + RAG |
+| **Session 持久化** | Redis + PostgreSQL | 活跃会话缓存 + 历史持久化 |
+| **网络搜索** | Tavily/DuckDuckGo | RAG 补充（可选） |
 | **文档处理** | LangChain 文档加载器 | PyPDFLoader, TextLoader 等 |
 | **文件存储** | 本地文件系统 | 上传文件存到本地目录 |
 | **GitHub 集成** | PyGithub | PAT 令牌认证 |
+| **容器化** | Docker + Docker Compose | 开发环境服务隔离 |
 
 ### 3.2 系统架构
 
@@ -93,13 +112,62 @@
 ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
 │  项目服务      │  │  LangGraph    │  │ GitHub 服务   │
 │  (PostgreSQL) │  │  Agent + RAG  │  │  (PyGithub)   │
-└───────────────┘  └───────────────┘  └───────────────┘
+└───────────────┘  └───────┬───────┘  └───────────────┘
         │                  │
-        ▼                  ▼
-┌───────────────┐  ┌───────────────┐
-│   本地文件     │  │  Chroma DB    │
-│   存储目录     │  │ (向量存储)     │
-└───────────────┘  └───────────────┘
+        │          ┌───────┴───────┐
+        │          ▼               ▼
+        │   ┌─────────────┐  ┌─────────────┐
+        │   │   Chroma    │  │  网络搜索    │
+        │   │ (向量存储)   │  │ (Tavily)    │
+        │   └─────────────┘  └─────────────┘
+        │          │               │
+        └──────────┼───────────────┘
+                   ▼
+         ┌─────────────────┐
+         │ Redis (Session) │
+         │ PostgreSQL       │
+         └─────────────────┘
+```
+
+### 3.3 Docker 基础设施
+
+为避免污染本地系统环境，所有依赖服务通过 Docker 运行：
+
+| 服务 | 镜像 | 端口 | 用途 |
+|------|------|------|------|
+| PostgreSQL | postgres:16 | 5432 | 元数据存储 |
+| Redis | redis:7 | 6379 | Session 缓存 |
+| Chroma | chromadb/chroma | 8000 | 向量数据库（可选，本地开发用 SQLite 文件） |
+
+**镜像使用规范**：
+- **创建新 Docker 服务前**，必须先检查本地是否已有可用镜像：`docker images`
+- 如本地已有对应镜像，优先使用本地镜像（节省带宽和时间）
+- 如本地无镜像，pull 时使用 `postgres:16-alpine`、`redis:7-alpine` 等轻量镜像
+
+**docker-compose.yml 示例**：
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine  # 优先使用 alpine 轻量镜像
+    environment:
+      POSTGRES_DB: studclaw
+      POSTGRES_USER: studclaw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  redis_data:
 ```
 
 ---
@@ -370,7 +438,84 @@ api/
 
 ---
 
-## 8. 后续迭代
+## 8. Agent & RAG 优化
+
+### 8.1 RAG 检索修复
+| 功能 | 技术实现 |
+|------|----------|
+| Chroma collection 修复 | 删除 dimension=null 的无效 collection |
+| 缓存问题修复 | 移除 `rag_tool.py` 中的全局缓存 |
+| Chunk size 优化 | 增大到 500（当前 200） |
+
+### 8.2 Agent 提示词重写
+| 功能 | 技术实现 |
+|------|----------|
+| 角色转换 | 从"扫地机器人客服"改为"通用 AI 学习助手" |
+| 工具清理 | 移除模拟工具（天气、位置、报告生成等） |
+| 保留工具 | `rag_summarize`, `rag_retrieve` |
+
+### 8.3 网络搜索能力
+| 功能 | 技术实现 |
+|------|----------|
+| 网络搜索工具 | Tavily API / DuckDuckGo |
+| 联网开关 | 每次对话请求可选 `enable_web_search: bool` |
+| 检索策略 | 本地 RAG 优先，不足时启用网络搜索 |
+
+### 8.4 Session 持久化 ✅ 已实现
+| 功能 | 技术实现 |
+|------|----------|
+| 会话缓存 | Redis（TTL 7天） |
+| 持久化存储 | PostgreSQL |
+| 实现方式 | SessionManager (Redis + PostgreSQL) + SessionCheckpointSaver |
+
+**实现细节**：
+- `session_store/redis_store.py` - Redis 主存储，TTL=7天
+- `session_store/postgres_store.py` - PostgreSQL 异步批量备份
+- `session_store/manager.py` - 统一接口，定时同步（60秒或100条触发）
+- `session_store/checkpoint.py` - LangGraph Checkpoint 适配器
+- `config/session.yml` - Session 配置
+
+**PostgreSQL 表**：
+```sql
+CREATE TABLE agent_sessions (
+    session_id VARCHAR(255) PRIMARY KEY,
+    project_id VARCHAR(255) NOT NULL,
+    messages JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 8.5 关键文件清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| `rag/vector_store.py` | 修复 collection 创建 |
+| `rag/rag_service.py` | 检查检索流程 |
+| `agent/tools/rag_tool.py` | 移除缓存 |
+| `agent/tools/agent_tools.py` | 清理废弃模拟工具 |
+| `agent/tools/web_search_tool.py` | **新建** - 网络搜索工具 |
+| `agent/react_agent.py` | Session 持久化 + 网络搜索分支 |
+| `prompts/main_prompts.txt` | 重写为通用学习助手 |
+| `config/rag.yml` | 合并配置，chunk_size: 500 |
+| `config/session.yml` | **新建** - Session 配置 |
+| `api/chat.py` | 添加 `enable_web_search` 参数 |
+| `session_store/__init__.py` | **新建** - 模块导出 |
+| `session_store/redis_store.py` | **新建** - Redis 存储 |
+| `session_store/postgres_store.py` | **新建** - PostgreSQL 存储 |
+| `session_store/manager.py` | **新建** - 统一接口 + 异步批量 |
+| `session_store/checkpoint.py` | **新建** - LangGraph Checkpoint 适配器 |
+| `main.py` | SessionManager 初始化/关闭 |
+
+### 8.6 验收标准
+- [x] RAG 检索能正确返回上传文档内容
+- [x] Agent 扮演通用学习助手角色
+- [x] 联网开关可控制网络搜索
+- [x] Session 持久化实现 (Redis + PostgreSQL)
+
+---
+
+## 9. 后续迭代
 
 - [ ] NotebookLM Audio Overview 功能
 - [ ] 多租户支持
