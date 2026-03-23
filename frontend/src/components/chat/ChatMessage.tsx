@@ -38,10 +38,10 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
       >
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <p className="whitespace-pre-wrap">
-            {content.split("\n").map((line, i) => (
+            {(content || "").split("\n").map((line, i) => (
               <span key={i}>
                 {line}
-                {i < content.split("\n").length - 1 && <br />}
+                {i < (content || "").split("\n").length - 1 && <br />}
               </span>
             ))}
             {isStreaming && (

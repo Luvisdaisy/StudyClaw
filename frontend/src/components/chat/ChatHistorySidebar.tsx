@@ -53,11 +53,19 @@ function SessionItem({
 
   return (
     <>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         className={cn(
           "group relative w-full text-left px-3 py-3 rounded-lg transition-all duration-200",
-          "border border-transparent",
+          "border border-transparent cursor-pointer",
           "hover:bg-amber-50/80",
           isActive && "bg-amber-50 border-amber-200/60"
         )}
@@ -110,7 +118,7 @@ function SessionItem({
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
-      </button>
+      </div>
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="sm:max-w-md">

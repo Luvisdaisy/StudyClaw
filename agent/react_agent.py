@@ -15,7 +15,7 @@ from agent.tools.middleware import (
 )
 from model.factory import chat_model
 from utils.prompt_loader import load_system_prompts
-from session_store import get_session_checkpoint_saver
+from session_store import get_session_checkpoint_saver, get_session_manager
 from utils.logger_handler import get_logger
 
 logger = get_logger(__name__)
@@ -139,7 +139,7 @@ class ReactAgent:
         messages = [HumanMessage(content=query)]
 
         # Use session_id as thread_id for session persistence
-        config = {"configurable": {"thread_id": session_id}}
+        config = {"configurable": {"thread_id": session_id, "project_id": self.project_id}}
 
         # Prepare state with project context
         state = {
@@ -148,12 +148,16 @@ class ReactAgent:
             "enable_web_search": self.enable_web_search,
         }
 
+        # Collect all messages during streaming for session persistence
+        all_messages = list(messages)
+
         try:
             # Async stream execution - runs entirely in the main async event loop
             async for chunk in self.agent.astream(state, config=config):
                 # Handle messages output
                 if "messages" in chunk:
                     latest_message = chunk["messages"][-1]
+                    all_messages.append(latest_message)
                     if hasattr(latest_message, "content") and latest_message.content:
                         yield latest_message.content.strip() + "\n"
 
@@ -162,8 +166,20 @@ class ReactAgent:
                     model_output = chunk["model"]
                     if "messages" in model_output:
                         latest_message = model_output["messages"][-1]
+                        all_messages.append(latest_message)
                         if hasattr(latest_message, "content") and latest_message.content:
                             yield latest_message.content.strip() + "\n"
+
+            # Manually save session to SessionManager after streaming completes
+            # This ensures session persistence even if LangGraph's checkpointing doesn't trigger
+            manager = get_session_manager()
+            if manager and self.project_id:
+                from langchain_core.messages import message_to_dict
+                message_dicts = [message_to_dict(msg) for msg in all_messages]
+                logger.info(f"[SESSION] Saving {len(message_dicts)} messages for session {session_id}, project {self.project_id}")
+                await manager.put(session_id, self.project_id, message_dicts)
+            elif manager:
+                logger.warning(f"[SESSION] No project_id, not saving session")
 
         except Exception as e:
             logger.error(

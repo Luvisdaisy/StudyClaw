@@ -11,6 +11,7 @@ import time
 from typing import Optional, Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver, CheckpointTuple
+from langgraph.types import CheckpointMetadata
 
 from .manager import get_session_manager
 
@@ -38,18 +39,16 @@ class _AsyncRunner:
                 self._thread = threading.Thread(target=self._run_loop, daemon=True)
                 self._thread.start()
                 self._started = True
-                # Wait for loop to be ready
-                while self._loop is None:
-                    time.sleep(0.01)
 
     def run_async(self, coro):
-        """Run coroutine in the dedicated loop, blocking until complete."""
-        if not self._started:
-            self.start()
+        """Run async coroutine in the dedicated thread's event loop."""
+        if not self._loop:
+            raise RuntimeError("AsyncRunner not started")
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=30)
 
 
+# Global async runner for sync-to-async bridging
 _async_runner = _AsyncRunner()
 
 
@@ -71,44 +70,52 @@ class SessionCheckpointSaver(BaseCheckpointSaver):
         """Get SessionManager instance"""
         return get_session_manager()
 
-    async def get(self, config: dict) -> Optional[dict]:
+    async def aget_tuple(self, config: dict) -> Optional[CheckpointTuple]:
         """
-        Get checkpoint for given config.
-        Config expected: {"configurable": {"thread_id": session_id}}
+        Async get checkpoint tuple - called by LangGraph's AsyncPregelLoop.
         """
+        thread_id = config.get("configurable", {}).get("thread_id")
+
         if not self.manager:
-            logger.warning("SessionManager not initialized, using MemorySaver fallback")
             return None
 
-        thread_id = config.get("configurable", {}).get("thread_id")
         if not thread_id:
             return None
 
         checkpoint_data = await self.manager.get(thread_id)
         if checkpoint_data:
-            # Deserialize from JSON
-            return json.loads(checkpoint_data["binary_data"].decode("utf-8"))
+            checkpoint = json.loads(checkpoint_data["binary_data"].decode("utf-8"))
+            return CheckpointTuple(
+                config=config,
+                checkpoint=checkpoint,
+                metadata={},
+                parent_config=None,
+                pending_writes=None,
+            )
         return None
 
-    async def put(self, config: dict, checkpoint: dict) -> dict:
+    async def aput(
+        self,
+        config: dict,
+        checkpoint: Any,
+        metadata: CheckpointMetadata,
+        new_versions: dict = None,
+    ) -> dict:
         """
-        Save checkpoint for given config.
-        Returns new config with checkpoint_id.
+        Async put checkpoint - called by LangGraph's AsyncPregelLoop.
         """
-        if not self.manager:
-            logger.warning("SessionManager not initialized, checkpoint not saved")
-            return config
-
         thread_id = config.get("configurable", {}).get("thread_id")
         project_id = config.get("configurable", {}).get("project_id", "default")
 
+        if not self.manager:
+            return config
+
         if thread_id:
             # checkpoint is the serialized state (messages list)
-            messages = checkpoint.get("messages", checkpoint)
+            messages = checkpoint.get("messages", checkpoint) if hasattr(checkpoint, "get") else checkpoint.get("messages", [])
             if isinstance(messages, list):
                 await self.manager.put(thread_id, project_id, messages)
 
-        # Return config with checkpoint_id (use thread_id as checkpoint_id)
         return {
             "configurable": {
                 **config.get("configurable", {}),
@@ -116,34 +123,52 @@ class SessionCheckpointSaver(BaseCheckpointSaver):
             }
         }
 
-    def get_tuple(self, config: dict):
+    def get_tuple(self, config: dict) -> Optional[CheckpointTuple]:
         """
-        Sync version - runs async get() via dedicated event loop runner.
+        Sync version - runs async aget_tuple via dedicated event loop runner.
         Called by LangGraph's SyncPregelLoop.
         """
         thread_id = config.get("configurable", {}).get("thread_id")
+        logger.info(f"[CHECKPOINT get_tuple SYNC] Called for thread_id={thread_id}")
+
         if not thread_id or not self.manager:
             return None
 
         checkpoint_data = _async_runner.run_async(self.manager.get(thread_id))
         if checkpoint_data:
-            # Deserialize from JSON (same as async get())
-            return json.loads(checkpoint_data["binary_data"].decode("utf-8"))
+            checkpoint = json.loads(checkpoint_data["binary_data"].decode("utf-8"))
+            return CheckpointTuple(
+                config=config,
+                checkpoint=checkpoint,
+                metadata={},
+                parent_config=None,
+                pending_writes=None,
+            )
         return None
 
-    def put(self, config: dict, checkpoint: dict, metadata: dict = None, new_versions: dict = None) -> dict:
+    def put(
+        self,
+        config: dict,
+        checkpoint: Any,
+        metadata: CheckpointMetadata = None,
+        new_versions: dict = None,
+    ) -> dict:
         """
-        Sync version - runs async put() via dedicated event loop runner.
+        Sync version - runs async aput via dedicated event loop runner.
         Called by LangGraph's SyncPregelLoop.
         """
         thread_id = config.get("configurable", {}).get("thread_id")
         project_id = config.get("configurable", {}).get("project_id", "default")
+        logger.info(f"[CHECKPOINT put SYNC] thread_id={thread_id}, project_id={project_id}")
+
         if thread_id and self.manager:
-            messages = checkpoint.get("messages", checkpoint)
+            messages = checkpoint.get("messages", checkpoint) if hasattr(checkpoint, "get") else checkpoint.get("messages", [])
             if isinstance(messages, list):
+                logger.info(f"[CHECKPOINT put SYNC] Saving {len(messages)} messages")
                 _async_runner.run_async(
                     self.manager.put(thread_id, project_id, messages)
                 )
+
         return {
             "configurable": {
                 **config.get("configurable", {}),
@@ -163,61 +188,32 @@ class SessionCheckpointSaver(BaseCheckpointSaver):
                 self.manager.append_writes(thread_id, task_id, writes)
             )
 
-    async def list(
+    async def alist(
         self,
         config: Optional[dict] = None,
         *,
         filter: Optional[dict] = None,
         before: Optional[dict] = None,
         limit: Optional[int] = None,
-    ) -> list[dict]:
-        """
-        List checkpoints (not fully implemented - requires additional index).
-        """
-        # For now, return empty list - full implementation would query by project_id
-        return []
+    ):
+        """List checkpoints (not implemented for now)."""
+        return
+        yield  # Make this an async generator
 
-    async def aget_tuple(self, config: dict):
-        """
-        Async version of get_tuple - called by AsyncPregelLoop.
-        Returns CheckpointTuple with config, checkpoint, and metadata.
-        """
-        checkpoint = await self.get(config)
-        if checkpoint:
-            return CheckpointTuple(config=config, checkpoint=checkpoint)
-        return None
-
-    async def aput(self, config: dict, checkpoint: dict, metadata: dict = None, new_versions: dict = None) -> dict:
-        """
-        Async version of put - called by AsyncPregelLoop.
-        Returns new config with checkpoint_id.
-        """
-        if not self.manager:
-            logger.warning("SessionManager not initialized, checkpoint not saved")
-            return config
-
-        thread_id = config.get("configurable", {}).get("thread_id")
-        project_id = config.get("configurable", {}).get("project_id", "default")
-
-        if thread_id:
-            messages = checkpoint.get("messages", checkpoint)
-            if isinstance(messages, list):
-                await self.manager.put(thread_id, project_id, messages)
-
-        return {
-            "configurable": {
-                **config.get("configurable", {}),
-                "checkpoint_id": thread_id,
-            }
-        }
-
-    async def aput_writes(self, config: dict, writes: list, task_id: str, task_path: str = "") -> None:
+    async def aput_writes(
+        self,
+        config: dict,
+        writes: list,
+        task_id: str,
+        task_path: str = "",
+    ) -> None:
         """
         Async version of put_writes - called by AsyncPregelLoop.
         Stores intermediate task outputs.
         """
         thread_id = config.get("configurable", {}).get("thread_id")
         project_id = config.get("configurable", {}).get("project_id", "default")
+        logger.info(f"[CHECKPOINT aput_writes] thread_id={thread_id}, task_id={task_id}, {len(writes)} writes")
         if thread_id and self.manager and writes:
             await self.manager.append_writes(thread_id, task_id, writes)
 

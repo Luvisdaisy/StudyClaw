@@ -107,9 +107,14 @@ class SessionManager:
     def _derive_title(self, messages: list[dict]) -> str:
         """Derive session title from first user message."""
         for msg in messages:
-            if msg.get("role") == "user" and msg.get("content"):
-                content = msg["content"]
-                return content[:100] if len(content) > 100 else content
+            # Handle both flat and nested message formats from LangChain
+            # Flat format: {"type": "human", "content": "..."}
+            # Nested format: {"type": "human", "data": {"content": "..."}}
+            msg_type = msg.get("role") or msg.get("type")
+            if msg_type == "human":
+                content = msg.get("content") or msg.get("data", {}).get("content")
+                if content:
+                    return content[:100] if len(content) > 100 else content
         return ""
 
     async def load(self, session_id: str) -> Optional[list[dict]]:
