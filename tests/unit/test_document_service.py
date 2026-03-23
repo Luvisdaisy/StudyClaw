@@ -163,11 +163,19 @@ class TestDocumentServiceGet:
         self, service: DocumentService, db_session: AsyncSession
     ):
         """Test getting document from different project returns None."""
+        # Create another project first (to satisfy foreign key constraint)
+        other_project = Project(
+            id=uuid.uuid4(),
+            name="Other Project",
+            description="Another project",
+        )
+        db_session.add(other_project)
+        await db_session.commit()
+
         # Create document in different project
-        other_project_id = uuid.uuid4()
         doc = Document(
             id=uuid.uuid4(),
-            project_id=other_project_id,
+            project_id=other_project.id,
             filename="other.pdf",
             file_path="/fake/path/other.pdf",
             file_type="pdf",

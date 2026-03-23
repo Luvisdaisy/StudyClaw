@@ -242,7 +242,32 @@ volumes:
 
 ---
 
-### 阶段一：核心功能（文档问答）
+### 阶段一：核心功能（文档问答） ✅ 已完成
+
+**完成时间**: 2026-03-21
+
+**摘要**: FastAPI 后端核心功能，项目隔离的文档管理和 RAG 问答
+
+**已创建文件**:
+- `database/models.py` - Project 和 Document SQLAlchemy 模型
+- `database/session.py` - 异步数据库会话管理
+- `services/project_service.py` - 项目 CRUD 服务
+- `services/document_service.py` - 文档上传处理服务
+- `rag/vector_store.py` - 项目级向量存储 (collection 隔离)
+- `rag/rag_service.py` - RAG 服务
+- `agent/tools/rag_tool.py` - 项目级 RAG 工具
+- `agent/react_agent.py` - 支持项目上下文的 LangGraph Agent
+- `api/projects.py` - 项目管理 API
+- `api/documents.py` - 文档管理 API
+- `api/chat.py` - 流式问答 API
+- `main.py` - FastAPI 入口
+
+**验收标准**:
+- [x] 可创建/查询/删除项目 (API 已测试)
+- [x] 可上传 PDF/MD/TXT 文档
+- [x] 文档上传后自动分块存入 Chroma
+- [x] RAG 问答检索到正确的项目文档
+- [x] 不同项目知识库完全隔离 (collection 级隔离)
 
 #### 技术方案
 
@@ -295,7 +320,31 @@ api/
 
 ---
 
-### 阶段二：前端开发
+### 阶段二：前端开发 ✅ 已完成
+
+**完成时间**: 2026-03-21
+
+**摘要**: Next.js 14 + Shadcn UI 管理界面
+
+**已创建文件**:
+- `frontend/src/app/page.tsx` - 首页/项目列表
+- `frontend/src/app/projects/[id]/page.tsx` - 项目详情/对话页
+- `frontend/src/app/projects/[id]/documents/page.tsx` - 文档管理
+- `frontend/src/app/projects/[id]/settings/page.tsx` - GitHub 设置
+- `frontend/src/app/projects/new/page.tsx` - 新建项目
+- `frontend/src/components/projects/ProjectList.tsx`, `ProjectCard.tsx`, `CreateProjectDialog.tsx`
+- `frontend/src/components/documents/DocumentUpload.tsx`, `DocumentList.tsx`, `DocumentItem.tsx`
+- `frontend/src/components/chat/ChatInterface.tsx`, `ChatMessage.tsx`, `ChatInput.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`, `Header.tsx`
+- `frontend/src/lib/api.ts` - API 调用封装
+
+**验收标准**:
+- [x] 可访问 http://localhost:3000 查看项目列表
+- [x] 可创建新项目
+- [x] 可上传 PDF/MD/TXT 文档
+- [x] 可查看/删除文档
+- [x] 可进行聊天对话（流式响应）
+- [x] Next.js build 通过
 
 #### 技术方案
 
@@ -372,152 +421,116 @@ frontend/
 
 ---
 
-### 阶段三：GitHub 同步
+### 阶段三：GitHub 同步 ✅ 已完成
 
-#### 技术方案
+**完成时间**: 2026-03-22
 
-| 功能 | 技术实现 |
-|------|----------|
-| **GitHub API** | PyGithub 库 |
-| **仓库列表** | GitHub API 列出用户仓库 |
-| **文件下载** | GitHub Contents API |
-| **同步触发** | 手动 POST 触发 |
+**摘要**: GitHub 仓库文档同步功能
 
-#### 实现思路
+**已创建文件**:
+- `services/github_service.py` - GitHub API 封装
+- `api/github.py` - GitHub 同步 API
+- `frontend/src/components/github/GitHubSettings.tsx` - GitHub 连接表单
+- `frontend/src/components/github/SyncStatus.tsx` - 同步状态显示
 
-1. **连接 GitHub**：用户输入 PAT 令牌，存储到项目配置
-2. **获取仓库列表**：调用 GitHub API 获取用户有权限的仓库
-3. **选择仓库**：用户选择后保存到项目配置
-4. **手动同步流程**：
-   - 调用 GitHub API 获取仓库文件树
-   - 过滤 pdf/md/txt 文件
-   - 下载文件内容
-   - 调用 LangChain 加载器处理
-   - 存入项目对应的 Chroma collection
-5. **去重**：使用 file_hash (GitHub commit ID + path) 避免重复
+**API 端点**:
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | /api/projects/{id}/github/connect | 连接 GitHub |
+| POST | /api/projects/{id}/github/disconnect | 断开 GitHub |
+| GET | /api/projects/{id}/github/repos | 仓库列表 |
+| PATCH | /api/projects/{id}/github/repo | 选择仓库 |
+| POST | /api/projects/{id}/github/sync | 触发同步 |
+| GET | /api/projects/{id}/github/sync/status | 同步状态 |
+| GET | /api/projects/{id}/github/user | GitHub 用户信息 |
 
-#### 关键文件
-
-```
-services/
-├── github_service.py    # 新增：GitHub API 封装
-api/
-└── github.py           # 新增：GitHub 同步 API
-```
+**验收标准**:
+- [x] 可连接 GitHub 账号
+- [x] 可选择要同步的仓库
+- [x] 可手动触发同步
+- [x] 同步后文档出现在项目知识库
 
 ---
 
-### 阶段四：增强功能
+### 阶段四：Agent & RAG 优化 ✅ 已完成
 
-| 功能 | 技术实现 |
-|------|----------|
-| **NotebookLM Audio** | TTS 生成（后续考虑） |
-| **文档版本管理** | PostgreSQL 版本表 |
-| **高级搜索** | 混合搜索 (BM25 + 向量) |
+**完成时间**: 2026-03-22
+
+**摘要**: 修复 RAG 检索问题，优化 Agent 角色定位，添加网络搜索能力，Session 持久化
+
+#### 4.1 RAG 检索修复
+- 修复 Chroma `agent` collection dimension=null 问题
+- 移除 `rag_tool.py` 中的全局缓存
+- 增大 chunk_size: 200 → 500
+
+#### 4.2 Agent 提示词重写
+- 重写 `prompts/main_prompts.txt` 为通用 AI 学习助手角色
+- 清理废弃模拟工具: `get_weather`, `get_user_location`, `get_user_id`, `get_current_month`, `fetch_external_data`, `fill_context_for_report`
+
+#### 4.3 网络搜索能力
+- 创建 `agent/tools/web_search_tool.py` - BraveSearch 集成
+- `ChatRequest` 添加 `enable_web_search: bool = False` 字段
+- Agent 根据参数决定是否启用网络搜索
+
+#### 4.4 Session 持久化 ✅ 已实现
+- Redis 主存储 (TTL=7天)
+- PostgreSQL 异步批量备份
+- 定时同步 (60秒间隔 或 100条触发)
+
+**已创建文件**:
+- `session_store/redis_store.py` - Redis 存储 (TTL=7天)
+- `session_store/postgres_store.py` - PostgreSQL 异步批量备份
+- `session_store/manager.py` - 统一接口 + 异步批量
+- `session_store/checkpoint.py` - LangGraph Checkpoint 适配器
+- `session_store/conftest.py` - 共享 fixtures
+- `config/session.yml` - Session 配置
+
+**验收标准**:
+- [x] RAG 检索能正确返回上传文档内容
+- [x] Agent 扮演通用学习助手角色
+- [x] 联网开关可控制网络搜索
+- [x] Session 持久化实现 (Redis + PostgreSQL 备份)
 
 ---
 
 ## 7. 验收标准
 
-### 功能验收
-- [ ] 可创建多个独立项目
-- [ ] 每个项目的知识库完全隔离
-- [ ] 支持 PDF、Markdown、TXT 上传
-- [ ] RAG 问答能正确检索项目内文档
-- [ ] 文件增删改查功能正常
-- [ ] GitHub 仓库可手动同步
-- [ ] Next.js 前端可正常访问
-- [ ] 项目管理功能正常
-- [ ] 文档上传/删除功能正常
-- [ ] 聊天对话功能正常
+### 功能验收 ✅ 全部通过
+- [x] 可创建多个独立项目
+- [x] 每个项目的知识库完全隔离
+- [x] 支持 PDF、Markdown、TXT 上传
+- [x] RAG 问答能正确检索项目内文档
+- [x] 文件增删改查功能正常
+- [x] GitHub 仓库可手动同步
+- [x] Next.js 前端可正常访问
+- [x] 项目管理功能正常
+- [x] 文档上传/删除功能正常
+- [x] 聊天对话功能正常
 
 ### 性能验收
-- [ ] 文档上传后 5 秒内可检索
-- [ ] 问答响应时间 < 10 秒
-- [ ] 支持 10 人同时使用
+- [x] 文档上传后 5 秒内可检索
+- [x] 问答响应时间 < 10 秒
+- [ ] 支持 10 人同时使用 (待验证)
 
 ---
 
-## 8. Agent & RAG 优化
-
-### 8.1 RAG 检索修复
-| 功能 | 技术实现 |
-|------|----------|
-| Chroma collection 修复 | 删除 dimension=null 的无效 collection |
-| 缓存问题修复 | 移除 `rag_tool.py` 中的全局缓存 |
-| Chunk size 优化 | 增大到 500（当前 200） |
-
-### 8.2 Agent 提示词重写
-| 功能 | 技术实现 |
-|------|----------|
-| 角色转换 | 从"扫地机器人客服"改为"通用 AI 学习助手" |
-| 工具清理 | 移除模拟工具（天气、位置、报告生成等） |
-| 保留工具 | `rag_summarize`, `rag_retrieve` |
-
-### 8.3 网络搜索能力
-| 功能 | 技术实现 |
-|------|----------|
-| 网络搜索工具 | Tavily API / DuckDuckGo |
-| 联网开关 | 每次对话请求可选 `enable_web_search: bool` |
-| 检索策略 | 本地 RAG 优先，不足时启用网络搜索 |
-
-### 8.4 Session 持久化 ✅ 已实现
-| 功能 | 技术实现 |
-|------|----------|
-| 会话缓存 | Redis（TTL 7天） |
-| 持久化存储 | PostgreSQL |
-| 实现方式 | SessionManager (Redis + PostgreSQL) + SessionCheckpointSaver |
-
-**实现细节**：
-- `session_store/redis_store.py` - Redis 主存储，TTL=7天
-- `session_store/postgres_store.py` - PostgreSQL 异步批量备份
-- `session_store/manager.py` - 统一接口，定时同步（60秒或100条触发）
-- `session_store/checkpoint.py` - LangGraph Checkpoint 适配器
-- `config/session.yml` - Session 配置
-
-**PostgreSQL 表**：
-```sql
-CREATE TABLE agent_sessions (
-    session_id VARCHAR(255) PRIMARY KEY,
-    project_id VARCHAR(255) NOT NULL,
-    messages JSONB NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### 8.5 关键文件清单
-
-| 文件 | 修改内容 |
-|------|----------|
-| `rag/vector_store.py` | 修复 collection 创建 |
-| `rag/rag_service.py` | 检查检索流程 |
-| `agent/tools/rag_tool.py` | 移除缓存 |
-| `agent/tools/agent_tools.py` | 清理废弃模拟工具 |
-| `agent/tools/web_search_tool.py` | **新建** - 网络搜索工具 |
-| `agent/react_agent.py` | Session 持久化 + 网络搜索分支 |
-| `prompts/main_prompts.txt` | 重写为通用学习助手 |
-| `config/rag.yml` | 合并配置，chunk_size: 500 |
-| `config/session.yml` | **新建** - Session 配置 |
-| `api/chat.py` | 添加 `enable_web_search` 参数 |
-| `session_store/__init__.py` | **新建** - 模块导出 |
-| `session_store/redis_store.py` | **新建** - Redis 存储 |
-| `session_store/postgres_store.py` | **新建** - PostgreSQL 存储 |
-| `session_store/manager.py` | **新建** - 统一接口 + 异步批量 |
-| `session_store/checkpoint.py` | **新建** - LangGraph Checkpoint 适配器 |
-| `main.py` | SessionManager 初始化/关闭 |
-
-### 8.6 验收标准
-- [x] RAG 检索能正确返回上传文档内容
-- [x] Agent 扮演通用学习助手角色
-- [x] 联网开关可控制网络搜索
-- [x] Session 持久化实现 (Redis + PostgreSQL)
-
----
-
-## 9. 后续迭代
+## 8. 后续迭代 (Phase 5)
 
 - [ ] NotebookLM Audio Overview 功能
 - [ ] 多租户支持
 - [ ] 文档版本管理
 - [ ] 协作功能
+
+---
+
+## 9. Recent Updates
+
+| 日期 | 变更 |
+|------|------|
+| 2026-03-22 | 阶段四完成 - Session 持久化 (Redis + PostgreSQL) |
+| 2026-03-22 | 阶段四 - Agent & RAG 优化 (网络搜索, 提示词重写) |
+| 2026-03-22 | 阶段三完成 - GitHub 同步功能 |
+| 2026-03-22 | 前端删除确认对话框统一为 UI 组件 |
+| 2026-03-22 | 代码审查修复 (PR #4) - 安全、组件、类型修复 |
+| 2026-03-21 | 阶段二完成 - Next.js 前端开发 |
+| 2026-03-21 | 阶段一完成 - FastAPI 后端核心功能 |

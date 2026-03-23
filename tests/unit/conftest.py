@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for tests."""
+"""Shared pytest fixtures for unit tests."""
 import asyncio
 import uuid
 from typing import AsyncGenerator
@@ -49,8 +49,8 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def db_sample_project(db_session: AsyncSession) -> Project:
-    """Create a sample project for testing (returns Project model, not dict)."""
+async def sample_project(db_session: AsyncSession) -> Project:
+    """Create a sample project for unit tests (returns Project model)."""
     project = Project(
         id=uuid.uuid4(),
         name="Test Project",

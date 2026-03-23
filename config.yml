@@ -1,11 +1,10 @@
-# RAG Configuration
-# Merged from rag.yml and chroma.yml
+# StudyClaw Configuration
 
 # Model settings
 chat_model_name: qwen3-max
 embedding_model_name: text-embedding-v4
 
-# Chroma settings
+# Chroma/RAG settings
 collection_name: agent
 persist_directory: chroma_db
 k: 3
@@ -18,3 +17,7 @@ allow_knowledge_file_type: ["txt", "pdf", "md"]
 chunk_size: 500
 chunk_overlap: 20
 separators: ["\n\n", "\n", ".", "!", "?", "。", "！", "？", " ", ""]
+
+# Prompt paths
+main_prompt_path: prompts/main_prompts.txt
+rag_prompt_path: prompts/rag_prompts.txt
