@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 import json
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,6 +16,7 @@ router = APIRouter(prefix="/api/projects", tags=["chat"])
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    enable_web_search: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -40,17 +40,14 @@ async def chat(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Get or create agent for this project
-    agent = ProjectAgentFactory.get_agent(str(project_id))
+    agent = ProjectAgentFactory.get_agent(str(project_id), request.enable_web_search)
 
     # Use session_id or generate one
     session_id = request.session_id or str(uuid.uuid4())
 
     async def generate():
         try:
-            loop = asyncio.get_event_loop()
-            for chunk in await loop.run_in_executor(
-                None, agent.execute_stream, request.message, session_id
-            ):
+            async for chunk in agent.async_execute_stream(request.message, session_id):
                 if chunk:
                     # Send as SSE format
                     yield f"data: {json.dumps({'content': chunk})}\n\n"

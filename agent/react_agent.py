@@ -1,70 +1,65 @@
-import uuid
 from typing import TypedDict, Annotated, Sequence, Optional
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
+import traceback
 
-from agent.tools.rag_tool import get_rag_service, rag_summarize, rag_retrieve
-from agent.tools.agent_tools import (
-    get_current_month,
-    get_weather,
-    get_user_location,
-    get_user_id,
-    fetch_external_data,
-    fill_context_for_report,
-)
+from agent.tools.rag_tool import rag_summarize, rag_retrieve
+from agent.tools.web_search_tool import web_search
 from model.factory import chat_model
-from utils.prompt_loader import load_system_prompts, load_report_prompts
+from utils.prompt_loader import load_system_prompts
+from session_store import get_session_checkpoint_saver
+from utils.logger_handler import get_logger
+
+logger = get_logger(__name__)
 
 
 class AgentState(TypedDict):
     """Agent state definition"""
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    context: dict
     project_id: Optional[str]
+    enable_web_search: bool
 
 
-def create_langgraph_agent(project_id: Optional[str] = None):
+def create_langgraph_agent(project_id: Optional[str] = None, enable_web_search: bool = False):
     """Create a LangGraph agent with project context"""
 
     # Build tools list
     tools = [
         rag_summarize,
         rag_retrieve,
-        get_weather,
-        get_user_location,
-        get_user_id,
-        get_current_month,
-        fetch_external_data,
-        fill_context_for_report,
     ]
+
+    # Add web search tool if enabled
+    if enable_web_search:
+        tools.append(web_search)
 
     # Create tool node
     tool_node = ToolNode(tools)
 
     def call_model_node(state: AgentState) -> AgentState:
-        """Model call node - select prompt based on context"""
-        context = state.get("context", {})
-
-        # Select prompt based on context
-        if context.get("report", False):
-            system_prompt = load_report_prompts()
-        else:
+        """Model call node - generate response"""
+        try:
             system_prompt = load_system_prompts()
 
-        # Add project context to system prompt
-        if project_id:
-            system_prompt = f"{system_prompt}\n\n[System] Current project ID: {project_id}"
+            # Add project context to system prompt
+            if project_id:
+                system_prompt = f"{system_prompt}\n\n[System] Current project ID: {project_id}"
 
-        # Build message with system prompt
-        system_msg = SystemMessage(content=system_prompt)
-        response = chat_model.bind_tools(tools).invoke(
-            [system_msg] + list(state["messages"])
-        )
+            # Build message with system prompt
+            system_msg = SystemMessage(content=system_prompt)
+            response = chat_model.bind_tools(tools).invoke(
+                [system_msg] + list(state["messages"])
+            )
 
-        return {"messages": [response]}
+            return {"messages": [response]}
+        except Exception as e:
+            logger.error(
+                f"Error in call_model_node: type={type(e).__name__}, message={str(e)}, "
+                f"traceback={traceback.format_exc()}"
+            )
+            raise
 
     def should_continue(state: AgentState) -> str:
         """Conditional edge: check if tool call is needed"""
@@ -93,30 +88,21 @@ def create_langgraph_agent(project_id: Optional[str] = None):
     builder.add_edge("tools", "model")  # After tool execution, back to model
 
     # Compile with checkpointer for session persistence
-    checkpointer = MemorySaver()
+    # Use SessionCheckpointSaver if available, otherwise fallback to MemorySaver
+    checkpointer = get_session_checkpoint_saver()
     return builder.compile(checkpointer=checkpointer)
 
 
 class ReactAgent:
     """React Agent class with project support"""
 
-    def __init__(self, project_id: Optional[str] = None):
+    def __init__(self, project_id: Optional[str] = None, enable_web_search: bool = False):
         self.project_id = project_id
-        self.agent = create_langgraph_agent(project_id)
-        self._context = {"report": False}
+        self.enable_web_search = enable_web_search
+        self.agent = create_langgraph_agent(project_id, enable_web_search)
 
-    def _update_context_from_tool_calls(self, messages: list[BaseMessage]) -> None:
-        """Extract tool calls from messages and update context"""
-        for msg in messages:
-            if isinstance(msg, AIMessage) and hasattr(msg, "tool_calls"):
-                if msg.tool_calls:
-                    for tool_call in msg.tool_calls:
-                        if tool_call.get("name") == "fill_context_for_report":
-                            self._context["report"] = True
-                            return
-
-    def execute_stream(self, query: str, session_id: str = "default"):
-        """Execute query with streaming"""
+    async def async_execute_stream(self, query: str, session_id: str = "default"):
+        """Execute query with async streaming (runs entirely in async context to avoid event loop mismatch)"""
         # Build messages
         messages = [HumanMessage(content=query)]
 
@@ -126,19 +112,17 @@ class ReactAgent:
         # Prepare state with project context
         state = {
             "messages": messages,
-            "context": self._context,
             "project_id": self.project_id,
+            "enable_web_search": self.enable_web_search,
         }
 
         try:
-            # Stream execution
-            for chunk in self.agent.stream(state, config=config):
+            # Async stream execution - runs entirely in the main async event loop
+            async for chunk in self.agent.astream(state, config=config):
                 # Handle messages output
                 if "messages" in chunk:
                     latest_message = chunk["messages"][-1]
                     if hasattr(latest_message, "content") and latest_message.content:
-                        if isinstance(latest_message, AIMessage):
-                            self._update_context_from_tool_calls([latest_message])
                         yield latest_message.content.strip() + "\n"
 
                 # Handle model node output
@@ -150,27 +134,16 @@ class ReactAgent:
                             yield latest_message.content.strip() + "\n"
 
         except Exception as e:
-            yield f"Error: {str(e)}"
-
-    def execute_stream_with_context(
-        self,
-        query: str,
-        session_id: str = "default",
-        context: dict = None
-    ):
-        """Execute with custom context (for report generation)"""
-        if context:
-            self._context = context
-        return self.execute_stream(query, session_id)
-
-    def reset_context(self):
-        """Reset context"""
-        self._context = {"report": False}
+            logger.error(
+                f"Error in async_execute_stream: type={type(e).__name__}, message={str(e)}, "
+                f"traceback={traceback.format_exc()}"
+            )
+            yield f"Error: {type(e).__name__}: {str(e)}\nSee server logs for details."
 
     def set_project(self, project_id: str):
         """Switch to a different project"""
         self.project_id = project_id
-        self.agent = create_langgraph_agent(project_id)
+        self.agent = create_langgraph_agent(project_id, self.enable_web_search)
 
 
 class ProjectAgentFactory:
@@ -179,17 +152,20 @@ class ProjectAgentFactory:
     _agents: dict[str, ReactAgent] = {}
 
     @classmethod
-    def get_agent(cls, project_id: str) -> ReactAgent:
+    def get_agent(cls, project_id: str, enable_web_search: bool = False) -> ReactAgent:
         """Get or create agent for a project"""
-        if project_id not in cls._agents:
-            cls._agents[project_id] = ReactAgent(project_id=project_id)
-        return cls._agents[project_id]
+        key = f"{project_id}_websearch_{enable_web_search}"
+        if key not in cls._agents:
+            cls._agents[key] = ReactAgent(project_id=project_id, enable_web_search=enable_web_search)
+        return cls._agents[key]
 
     @classmethod
     def clear_agent(cls, project_id: str):
         """Remove agent for a project"""
-        if project_id in cls._agents:
-            del cls._agents[project_id]
+        # Clear all variants of this project_id
+        keys_to_remove = [k for k in cls._agents if k.startswith(f"{project_id}_")]
+        for k in keys_to_remove:
+            del cls._agents[k]
 
     @classmethod
     def clear_all(cls):

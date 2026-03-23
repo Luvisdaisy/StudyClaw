@@ -36,6 +36,7 @@ else:
         echo=False,
         pool_size=10,
         max_overflow=20,
+        pool_pre_ping=False,  # Disable - asyncpg handles connection health internally
     )
 
 # Create async session factory

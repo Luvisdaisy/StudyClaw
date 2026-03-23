@@ -3,9 +3,13 @@ from contextlib import asynccontextmanager
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from api import projects_router, documents_router, chat_router, github_router
-from database.session import init_db, close_db
+from database.session import init_db, close_db, AsyncSessionLocal
+from session_store import init_session_manager, shutdown_session_manager
 
 
 @asynccontextmanager
@@ -14,8 +18,28 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     print("Database initialized")
+
+    # Initialize Session Manager (Redis + PostgreSQL)
+    try:
+        await init_session_manager(
+            redis_host=os.getenv("REDIS_HOST", "localhost"),
+            redis_port=int(os.getenv("REDIS_PORT", "6379")),
+            redis_db=int(os.getenv("REDIS_DB", "0")),
+            redis_password=os.getenv("REDIS_PASSWORD") or None,
+            async_session_factory=AsyncSessionLocal,
+            batch_interval=int(os.getenv("SESSION_BATCH_INTERVAL", "60")),
+            batch_size=int(os.getenv("SESSION_BATCH_SIZE", "100")),
+        )
+        print("Session Manager initialized (Redis + PostgreSQL)")
+    except Exception as e:
+        print(f"Warning: Session Manager initialization failed: {e}")
+        print("Session persistence will be disabled")
+
     yield
+
     # Shutdown
+    await shutdown_session_manager()
+    print("Session Manager shutdown")
     await close_db()
     print("Database connections closed")
 
@@ -67,5 +91,5 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,
     )

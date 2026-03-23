@@ -6,12 +6,12 @@ from utils.logger_handler import get_logger
 logger = get_logger(__name__)
 
 
-def load_prompt(prompt_type: Literal["main", "rag", "report"]) -> str:
+def load_prompt(prompt_type: Literal["main", "rag"]) -> str:
     """
     Load prompt template by type.
 
     Args:
-        prompt_type: One of "main", "rag", or "report"
+        prompt_type: One of "main" or "rag"
 
     Returns:
         The prompt template string
@@ -47,12 +47,6 @@ def load_rag_prompts() -> str:
     return load_prompt("rag")
 
 
-def load_report_prompts() -> str:
-    """Load report prompt template."""
-    return load_prompt("report")
-
-
 if __name__ == "__main__":
     print(load_system_prompts())
     print(load_rag_prompts())
-    print(load_report_prompts())

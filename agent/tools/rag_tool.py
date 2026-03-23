@@ -1,6 +1,5 @@
 import uuid
 import logging
-from typing import Optional
 from langchain_core.documents import Document
 from langchain_core.tools import tool
 from rag.vector_store import VectorStoreService

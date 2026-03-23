@@ -33,9 +33,14 @@ dependencies = [
     "ruff>=0.15.4",
     "pypdf>=6.7.5",
     "pydantic>=2.0.0",
+    "requests>=2.31.0",
 
     # GitHub integration
     "PyGithub>=2.0.0",
+
+    # Session persistence
+    "redis>=5.0.0",
+    "psycopg2-binary>=2.9.0",
 ]
 
 [project.optional-dependencies]

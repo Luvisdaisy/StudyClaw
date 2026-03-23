@@ -1,2 +1,20 @@
+# RAG Configuration
+# Merged from rag.yml and chroma.yml
+
+# Model settings
 chat_model_name: qwen3-max
 embedding_model_name: text-embedding-v4
+
+# Chroma settings
+collection_name: agent
+persist_directory: chroma_db
+k: 3
+
+# Document processing settings
+data_path: data
+allow_knowledge_file_type: ["txt", "pdf", "md"]
+
+# Chunking settings
+chunk_size: 500
+chunk_overlap: 20
+separators: ["\n\n", "\n", ".", "!", "?", "。", "！", "？", " ", ""]
