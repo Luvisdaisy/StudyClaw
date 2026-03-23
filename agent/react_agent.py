@@ -186,6 +186,8 @@ class ProjectAgentFactory:
     @classmethod
     def get_agent(cls, project_id: str, enable_web_search: bool = False) -> ReactAgent:
         """Get or create agent for a project"""
+        # Ensure enable_web_search is an actual boolean to prevent string "False" being truthy
+        enable_web_search = enable_web_search is True
         key = f"{project_id}_websearch_{enable_web_search}"
         if key not in cls._agents:
             cls._agents[key] = ReactAgent(project_id=project_id, enable_web_search=enable_web_search)
