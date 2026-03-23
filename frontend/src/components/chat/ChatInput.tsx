@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,17 @@ interface ChatInputProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   disabled?: boolean;
+  enableWebSearch?: boolean;
+  onToggleWebSearch?: (enabled: boolean) => void;
 }
 
-export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps) {
+export function ChatInput({
+  onSendMessage,
+  isLoading,
+  disabled,
+  enableWebSearch = false,
+  onToggleWebSearch,
+}: ChatInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -44,7 +52,24 @@ export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
+    <form onSubmit={handleSubmit} className="flex items-end gap-2">
+      {onToggleWebSearch && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className={cn(
+            "h-[44px] w-[44px] shrink-0 transition-colors",
+            enableWebSearch
+              ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          )}
+          onClick={() => onToggleWebSearch(!enableWebSearch)}
+          title={enableWebSearch ? "Disable web search" : "Enable web search"}
+        >
+          <Globe className="h-4 w-4" />
+        </Button>
+      )}
       <Textarea
         ref={textareaRef}
         value={message}
@@ -59,7 +84,7 @@ export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps
       <Button
         type="submit"
         size="icon"
-        className="h-[44px] w-[44px]"
+        className="h-[44px] w-[44px] shrink-0"
         disabled={!message.trim() || isLoading || disabled}
       >
         {isLoading ? (
