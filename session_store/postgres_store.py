@@ -22,11 +22,12 @@ class PostgresStore:
         self._session_factory = async_session_factory
 
     async def init_schema(self):
-        """Create agent_sessions table if not exists"""
+        """Create agent_sessions table if not exists, or alter to add missing columns"""
         create_table_sql = text("""
             CREATE TABLE IF NOT EXISTS agent_sessions (
                 session_id VARCHAR(255) PRIMARY KEY,
                 project_id VARCHAR(255) NOT NULL,
+                title VARCHAR(500) NOT NULL DEFAULT '',
                 messages JSONB NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
@@ -40,22 +41,29 @@ class PostgresStore:
             CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated
             ON agent_sessions(updated_at)
         """)
+        # Alter table to add title column if it doesn't exist (for existing tables)
+        alter_table_sql = text("""
+            ALTER TABLE agent_sessions
+            ADD COLUMN IF NOT EXISTS title VARCHAR(500) NOT NULL DEFAULT ''
+        """)
 
         async with self._session_factory() as session:
             await session.execute(create_table_sql)
             await session.execute(create_project_index_sql)
             await session.execute(create_updated_index_sql)
+            await session.execute(alter_table_sql)
             await session.commit()
         logger.info("Initialized agent_sessions schema in PostgreSQL")
 
-    async def save(self, session_id: str, project_id: str, messages: list[dict]) -> bool:
+    async def save(self, session_id: str, project_id: str, messages: list[dict], title: str = "") -> bool:
         """Save session to PostgreSQL (upsert)"""
         try:
             upsert_sql = text("""
-                INSERT INTO agent_sessions (session_id, project_id, messages, updated_at)
-                VALUES (:session_id, :project_id, :messages, NOW())
+                INSERT INTO agent_sessions (session_id, project_id, title, messages, updated_at)
+                VALUES (:session_id, :project_id, :title, :messages, NOW())
                 ON CONFLICT (session_id)
                 DO UPDATE SET
+                    title = COALESCE(NULLIF(EXCLUDED.title, ''), agent_sessions.title),
                     messages = EXCLUDED.messages,
                     updated_at = NOW()
             """)
@@ -65,6 +73,7 @@ class PostgresStore:
                     {
                         "session_id": session_id,
                         "project_id": project_id,
+                        "title": title,
                         "messages": json.dumps(messages, ensure_ascii=False),
                     },
                 )
@@ -116,7 +125,7 @@ class PostgresStore:
         """Load all sessions for a project"""
         try:
             select_sql = text("""
-                SELECT session_id, messages, updated_at
+                SELECT session_id, title, messages, updated_at
                 FROM agent_sessions
                 WHERE project_id = :project_id
                 ORDER BY updated_at DESC
@@ -128,8 +137,9 @@ class PostgresStore:
                 return [
                     {
                         "session_id": row[0],
-                        "messages": json.loads(row[1]) if isinstance(row[1], str) else row[1],
-                        "updated_at": row[2].isoformat() if row[2] else None,
+                        "title": row[1] or "",
+                        "messages": json.loads(row[2]) if isinstance(row[2], str) else row[2],
+                        "updated_at": row[3].isoformat() if row[3] else None,
                     }
                     for row in rows
                 ]
@@ -137,16 +147,41 @@ class PostgresStore:
             logger.error(f"Failed to load sessions for project {project_id}: {e}")
             return []
 
+    async def get_session(self, session_id: str) -> Optional[dict]:
+        """Get a single session by ID."""
+        try:
+            select_sql = text("""
+                SELECT session_id, title, messages, created_at, updated_at
+                FROM agent_sessions
+                WHERE session_id = :session_id
+            """)
+            async with self._session_factory() as session:
+                result = await session.execute(select_sql, {"session_id": session_id})
+                row = result.fetchone()
+                if row:
+                    return {
+                        "session_id": row[0],
+                        "title": row[1] or "",
+                        "messages": json.loads(row[2]) if isinstance(row[2], str) else row[2],
+                        "created_at": row[3].isoformat() if row[3] else None,
+                        "updated_at": row[4].isoformat() if row[4] else None,
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get session {session_id}: {e}")
+            return None
+
     async def batch_save(self, sessions: list[dict]) -> bool:
         """Batch save multiple sessions (for periodic sync)"""
         if not sessions:
             return True
         try:
             insert_sql = text("""
-                INSERT INTO agent_sessions (session_id, project_id, messages, updated_at)
-                VALUES (:session_id, :project_id, :messages, NOW())
+                INSERT INTO agent_sessions (session_id, project_id, title, messages, updated_at)
+                VALUES (:session_id, :project_id, :title, :messages, NOW())
                 ON CONFLICT (session_id)
                 DO UPDATE SET
+                    title = COALESCE(NULLIF(EXCLUDED.title, ''), agent_sessions.title),
                     messages = EXCLUDED.messages,
                     updated_at = NOW()
             """)
@@ -157,6 +192,7 @@ class PostgresStore:
                         {
                             "session_id": s["session_id"],
                             "project_id": s["project_id"],
+                            "title": s.get("title", ""),
                             "messages": json.dumps(s["messages"], ensure_ascii=False),
                         },
                     )

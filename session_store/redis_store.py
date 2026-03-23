@@ -66,12 +66,13 @@ class RedisStore:
         """Generate Redis key for session"""
         return f"{self.prefix}{session_id}"
 
-    async def save(self, session_id: str, messages: list[dict]) -> bool:
-        """Save session messages to Redis"""
+    async def save(self, session_id: str, messages: list[dict], title: str = "") -> bool:
+        """Save session messages and title to Redis"""
         try:
             client = await self._get_client()
             key = self._make_key(session_id)
-            data = json.dumps(messages, ensure_ascii=False)
+            # Store as object with messages and title
+            data = json.dumps({"messages": messages, "title": title}, ensure_ascii=False)
             await client.setex(key, SESSION_TTL, data)
             logger.debug(f"Saved session {session_id} to Redis (TTL={SESSION_TTL}s)")
             return True
@@ -87,12 +88,35 @@ class RedisStore:
             data = await client.get(key)
             if data:
                 logger.debug(f"Loaded session {session_id} from Redis")
-                return json.loads(data)
+                parsed = json.loads(data)
+                # Handle both old format (just messages list) and new format (object with messages and title)
+                if isinstance(parsed, list):
+                    return parsed
+                return parsed.get("messages", [])
             logger.debug(f"Session {session_id} not found in Redis")
             return None
         except Exception as e:
             logger.error(f"Failed to load session {session_id} from Redis: {e}")
             return None
+
+    async def load_session(self, session_id: str) -> tuple[Optional[list[dict]], str]:
+        """Load session messages and title from Redis.
+        Returns (messages, title) tuple."""
+        try:
+            client = await self._get_client()
+            key = self._make_key(session_id)
+            data = await client.get(key)
+            if data:
+                logger.debug(f"Loaded session {session_id} from Redis")
+                parsed = json.loads(data)
+                if isinstance(parsed, list):
+                    return parsed, ""
+                return parsed.get("messages", []), parsed.get("title", "")
+            logger.debug(f"Session {session_id} not found in Redis")
+            return None, ""
+        except Exception as e:
+            logger.error(f"Failed to load session {session_id} from Redis: {e}")
+            return None, ""
 
     async def delete(self, session_id: str) -> bool:
         """Delete session from Redis"""

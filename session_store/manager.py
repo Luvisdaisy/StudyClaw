@@ -20,6 +20,7 @@ class PendingSession:
     session_id: str
     project_id: str
     messages: list[dict]
+    title: str = ""
     updated_at: datetime = field(default_factory=datetime.now)
 
 
@@ -79,9 +80,13 @@ class SessionManager:
     async def save(self, session_id: str, project_id: str, messages: list[dict]) -> bool:
         """
         Save session to Redis (sync) and queue for PostgreSQL (async).
+        Derives title from first user message if session is new (messages was empty).
         """
+        # Derive title from first user message
+        title = self._derive_title(messages)
+
         # Save to Redis (primary storage)
-        redis_ok = await self.redis.save(session_id, messages)
+        redis_ok = await self.redis.save(session_id, messages, title)
 
         # Queue for PostgreSQL sync
         async with self._pending_lock:
@@ -89,6 +94,7 @@ class SessionManager:
                 session_id=session_id,
                 project_id=project_id,
                 messages=messages,
+                title=title,
             )
 
         # Trigger sync if batch size reached
@@ -97,6 +103,14 @@ class SessionManager:
                 asyncio.create_task(self._flush_pending())
 
         return redis_ok
+
+    def _derive_title(self, messages: list[dict]) -> str:
+        """Derive session title from first user message."""
+        for msg in messages:
+            if msg.get("role") == "user" and msg.get("content"):
+                content = msg["content"]
+                return content[:100] if len(content) > 100 else content
+        return ""
 
     async def load(self, session_id: str) -> Optional[list[dict]]:
         """
@@ -149,7 +163,12 @@ class SessionManager:
             if not self._pending:
                 return
             sessions = [
-                {"session_id": s.session_id, "project_id": s.project_id, "messages": s.messages}
+                {
+                    "session_id": s.session_id,
+                    "project_id": s.project_id,
+                    "messages": s.messages,
+                    "title": s.title,
+                }
                 for s in self._pending.values()
             ]
             self._pending.clear()
