@@ -1,8 +1,9 @@
 """Unit tests for SessionCheckpointSaver (LangGraph adapter)"""
 
+import asyncio
 import pytest
 import json
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock, PropertyMock
 
 
 class TestSessionCheckpointSaver:
@@ -59,11 +60,13 @@ class TestSessionCheckpointSaver:
         project_id = "proj_test"
         checkpoint_data = {"messages": sample_messages}
 
-        mock_manager = AsyncMock()
-        mock_manager.put.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.put = AsyncMock(return_value=None)
 
+        # Patch get_session_manager directly like the other passing tests do
         with patch("session_store.checkpoint.get_session_manager", return_value=mock_manager):
-            result = await checkpoint_saver.put(
+            # Use aput (async put) since the class has both sync and async versions
+            result = await checkpoint_saver.aput(
                 {"configurable": {"thread_id": session_id, "project_id": project_id}},
                 checkpoint_data,
             )
@@ -77,11 +80,11 @@ class TestSessionCheckpointSaver:
         session_id = "checkpoint_put_default"
         checkpoint_data = {"messages": sample_messages}
 
-        mock_manager = AsyncMock()
-        mock_manager.put.return_value = True
+        mock_manager = MagicMock()
+        mock_manager.put = AsyncMock(return_value=None)
 
         with patch("session_store.checkpoint.get_session_manager", return_value=mock_manager):
-            await checkpoint_saver.put(
+            await checkpoint_saver.aput(
                 {"configurable": {"thread_id": session_id}},
                 checkpoint_data,
             )

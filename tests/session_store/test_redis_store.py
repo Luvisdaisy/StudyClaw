@@ -24,7 +24,10 @@ class TestRedisStore:
         call_args = mock_redis_client.setex.call_args
         assert call_args[0][0] == f"session:{session_id}"
         assert call_args[0][1] == SESSION_TTL
-        assert json.loads(call_args[0][2]) == sample_messages
+        # Data is now stored as {"messages": [...], "title": ""}
+        stored_data = json.loads(call_args[0][2])
+        assert stored_data["messages"] == sample_messages
+        assert stored_data["title"] == ""
 
     @pytest.mark.asyncio
     async def test_save_with_custom_prefix(self, mock_redis_client, sample_messages):

@@ -40,6 +40,20 @@ class TestPostgresStore:
         mock_async_session.commit.assert_called()
 
     @pytest.mark.asyncio
+    async def test_save_with_title(self, postgres_store, mock_async_session, sample_messages):
+        """Test save preserves title during upsert."""
+        session_id = "pg_session_title"
+        project_id = "project_1"
+        postgres_store._session_factory.return_value.__aenter__.return_value = mock_async_session
+
+        result = await postgres_store.save(session_id, project_id, sample_messages, title="Test Title")
+
+        assert result is True
+        call_args = mock_async_session.execute.call_args
+        params = call_args[0][1]
+        assert params["title"] == "Test Title"
+
+    @pytest.mark.asyncio
     async def test_save_uses_upsert(self, postgres_store, mock_async_session, sample_messages):
         """Test that save uses ON CONFLICT DO UPDATE (upsert)."""
         session_id = "pg_session_upsert"
@@ -119,8 +133,8 @@ class TestPostgresStore:
         from datetime import datetime
         mock_result = MagicMock()
         mock_result.fetchall.return_value = [
-            ("session_1", json.dumps(sample_messages), datetime.now()),
-            ("session_2", json.dumps([{"role": "user", "content": "Hi"}]), datetime.now()),
+            ("session_1", "Session 1 Title", json.dumps(sample_messages), datetime.now()),
+            ("session_2", "Session 2 Title", json.dumps([{"role": "user", "content": "Hi"}]), datetime.now()),
         ]
         mock_async_session.execute.return_value = mock_result
         postgres_store._session_factory.return_value.__aenter__.return_value = mock_async_session
@@ -129,7 +143,47 @@ class TestPostgresStore:
 
         assert len(results) == 2
         assert results[0]["session_id"] == "session_1"
+        assert results[0]["title"] == "Session 1 Title"
         assert results[1]["session_id"] == "session_2"
+        assert results[1]["title"] == "Session 2 Title"
+
+    # ------------------------------------------------------------------
+    # get_session()
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_get_session_found(self, postgres_store, mock_async_session, sample_messages):
+        """Test getting a session by ID."""
+        from datetime import datetime
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            "session_get",
+            "Get Session Title",
+            json.dumps(sample_messages),
+            datetime.now(),
+            datetime.now(),
+        )
+        mock_async_session.execute.return_value = mock_result
+        postgres_store._session_factory.return_value.__aenter__.return_value = mock_async_session
+
+        result = await postgres_store.get_session("session_get")
+
+        assert result is not None
+        assert result["session_id"] == "session_get"
+        assert result["title"] == "Get Session Title"
+        assert result["messages"] == sample_messages
+
+    @pytest.mark.asyncio
+    async def test_get_session_not_found(self, postgres_store, mock_async_session):
+        """Test getting non-existent session returns None."""
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = None
+        mock_async_session.execute.return_value = mock_result
+        postgres_store._session_factory.return_value.__aenter__.return_value = mock_async_session
+
+        result = await postgres_store.get_session("nonexistent")
+
+        assert result is None
 
     # ------------------------------------------------------------------
     # batch_save()

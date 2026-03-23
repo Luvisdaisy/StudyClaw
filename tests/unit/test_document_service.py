@@ -82,15 +82,6 @@ class TestDocumentServiceUpload:
             await service.upload_document(b"content", "script.js")
 
     @pytest.mark.asyncio
-    async def test_upload_document_empty_content(self, service: DocumentService):
-        """Test uploading empty file - DocumentService doesn't check empty content,
-        API layer checks it before calling service."""
-        # DocumentService.upload_document saves empty file without error
-        # but _process_document will fail later when loading empty PDF
-        # This test documents the actual behavior
-        pass
-
-    @pytest.mark.asyncio
     @patch.object(DocumentService, "_process_document")
     async def test_upload_document_duplicate(
         self, mock_process, service: DocumentService, db_session: AsyncSession

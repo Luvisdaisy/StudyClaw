@@ -32,18 +32,18 @@ class TestChatAPI:
 
     @pytest.mark.asyncio
     async def test_chat_with_empty_message(self, client: AsyncClient, sample_project: dict):
-        """Test chatting with empty message."""
+        """Test chatting with empty message returns validation error."""
         response = await client.post(
             f"/api/projects/{sample_project['id']}/chat",
             json={"message": ""},
         )
 
-        # Empty message may be accepted or rejected depending on implementation
-        assert response.status_code in [200, 400, 422]
+        # Empty string should be rejected as invalid input
+        assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_chat_with_session_id(self, client: AsyncClient, sample_project: dict):
-        """Test chatting with custom session ID."""
+        """Test chatting with custom session ID returns streaming response."""
         session_id = str(uuid.uuid4())
 
         response = await client.post(
@@ -51,68 +51,66 @@ class TestChatAPI:
             json={"message": "Hello", "session_id": session_id},
         )
 
-        # Response may be 200 (streaming) or 500 if Chroma not available
-        assert response.status_code in [200, 500]
+        # Should return 200 OK for streaming response
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_chat_with_web_search_flag(self, client: AsyncClient, sample_project: dict):
-        """Test chatting with web search enabled."""
+        """Test chatting with web search enabled returns streaming response."""
         response = await client.post(
             f"/api/projects/{sample_project['id']}/chat",
             json={"message": "Hello", "enable_web_search": True},
         )
 
-        assert response.status_code in [200, 500]
+        # Should return 200 OK for streaming response when web search is enabled
+        assert response.status_code == 200
+
+
+class TestChatSessionsAPI:
+    """Tests for chat session management endpoints."""
 
     @pytest.mark.asyncio
-    async def test_get_chat_history(self, client: AsyncClient, sample_project: dict):
-        """Test getting chat history."""
+    async def test_list_chat_sessions_project_not_found(self, client: AsyncClient):
+        """Test listing sessions for non-existent project returns 404."""
+        fake_project_id = str(uuid.uuid4())
+
+        response = await client.get(f"/api/projects/{fake_project_id}/chat/sessions")
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_get_chat_session_project_not_found(self, client: AsyncClient):
+        """Test getting session for non-existent project returns 404."""
+        fake_project_id = str(uuid.uuid4())
         session_id = str(uuid.uuid4())
 
         response = await client.get(
-            f"/api/projects/{sample_project['id']}/chat/history",
-            params={"session_id": session_id},
-        )
-
-        # Currently returns empty list (placeholder implementation)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["session_id"] == session_id
-        assert data["messages"] == []
-
-    @pytest.mark.asyncio
-    async def test_get_chat_history_project_not_found(self, client: AsyncClient):
-        """Test getting chat history for non-existent project returns 404."""
-        fake_project_id = str(uuid.uuid4())
-
-        response = await client.get(
-            f"/api/projects/{fake_project_id}/chat/history",
-            params={"session_id": "test"},
+            f"/api/projects/{fake_project_id}/chat/sessions/{session_id}",
         )
 
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_clear_chat_history(self, client: AsyncClient, sample_project: dict):
-        """Test clearing chat history."""
+    async def test_get_chat_session_not_found(self, client: AsyncClient, sample_project: dict):
+        """Test getting non-existent session returns 404."""
+        session_id = str(uuid.uuid4())
+
+        response = await client.get(
+            f"/api/projects/{sample_project['id']}/chat/sessions/{session_id}",
+        )
+
+        # Session not found (either project not found OR session not found)
+        # Since sample_project exists, we expect 404 from session manager or 404 from not found
+        assert response.status_code in [404, 503]
+
+    @pytest.mark.asyncio
+    async def test_delete_chat_session_project_not_found(self, client: AsyncClient):
+        """Test deleting session for non-existent project returns 404."""
+        fake_project_id = str(uuid.uuid4())
         session_id = str(uuid.uuid4())
 
         response = await client.delete(
-            f"/api/projects/{sample_project['id']}/chat/history",
-            params={"session_id": session_id},
-        )
-
-        assert response.status_code == 200
-        assert response.json()["message"] == "Chat history cleared"
-
-    @pytest.mark.asyncio
-    async def test_clear_chat_history_project_not_found(self, client: AsyncClient):
-        """Test clearing chat history for non-existent project returns 404."""
-        fake_project_id = str(uuid.uuid4())
-
-        response = await client.delete(
-            f"/api/projects/{fake_project_id}/chat/history",
-            params={"session_id": "test"},
+            f"/api/projects/{fake_project_id}/chat/sessions/{session_id}",
         )
 
         assert response.status_code == 404

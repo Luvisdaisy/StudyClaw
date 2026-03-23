@@ -1,5 +1,6 @@
 """Unit tests for SessionManager"""
 
+import json
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -196,4 +197,87 @@ class TestSessionManager:
             assert result["configurable"]["checkpoint_id"] == session_id
 
 
-import json  # For JSON serialization in tests
+class TestSessionManagerTitleDerivation:
+    """Tests for title derivation in SessionManager."""
+
+    @pytest.mark.asyncio
+    async def test_derive_title_from_first_user_message(self, session_manager):
+        """Test title is derived from first user message."""
+        messages = [
+            {"role": "user", "content": "This is my first question about Python"},
+            {"role": "assistant", "content": "Python is a programming language."},
+        ]
+
+        title = session_manager._derive_title(messages)
+
+        assert title == "This is my first question about Python"
+
+    @pytest.mark.asyncio
+    async def test_derive_title_truncates_long_content(self, session_manager):
+        """Test long titles are truncated to 100 characters."""
+        long_content = "A" * 150
+        messages = [
+            {"role": "user", "content": long_content},
+        ]
+
+        title = session_manager._derive_title(messages)
+
+        assert len(title) == 100
+        assert title == "A" * 100
+
+    @pytest.mark.asyncio
+    async def test_derive_title_ignores_assistant_messages(self, session_manager):
+        """Test title ignores assistant messages."""
+        messages = [
+            {"role": "assistant", "content": "Hello, how can I help?"},
+            {"role": "user", "content": "My actual question"},
+        ]
+
+        title = session_manager._derive_title(messages)
+
+        assert title == "My actual question"
+
+    @pytest.mark.asyncio
+    async def test_derive_title_empty_when_no_user_message(self, session_manager):
+        """Test title is empty when no user message exists."""
+        messages = [
+            {"role": "assistant", "content": "I am the assistant"},
+        ]
+
+        title = session_manager._derive_title(messages)
+
+        assert title == ""
+
+    @pytest.mark.asyncio
+    async def test_save_derives_title(self, session_manager, mock_redis_client, sample_messages):
+        """Test save() derives title from messages."""
+        session_id = "title_session"
+        project_id = "proj_title"
+
+        await session_manager.save(session_id, project_id, sample_messages)
+
+        async with session_manager._pending_lock:
+            pending = session_manager._pending[session_id]
+            # sample_messages first user message is "Hello, how are you?"
+            assert pending.title == "Hello, how are you?"
+
+
+class TestSessionManagerLoadByProject:
+    """Tests for load_by_project functionality."""
+
+    @pytest.mark.asyncio
+    async def test_load_by_project_calls_postgres(self, session_manager, postgres_store):
+        """Test load_by_project delegates to PostgreSQL."""
+        project_id = "proj_list"
+
+        mock_sessions = [
+            {"session_id": "s1", "title": "Session 1", "messages": [], "updated_at": "2024-01-01T00:00:00"},
+            {"session_id": "s2", "title": "Session 2", "messages": [], "updated_at": "2024-01-02T00:00:00"},
+        ]
+
+        with patch.object(postgres_store, 'load_by_project', new_callable=AsyncMock, return_value=mock_sessions):
+            result = await session_manager.pg.load_by_project(project_id)
+
+        assert len(result) == 2
+        assert result[0]["session_id"] == "s1"
+        assert result[1]["session_id"] == "s2"
